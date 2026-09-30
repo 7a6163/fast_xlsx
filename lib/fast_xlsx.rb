@@ -14,9 +14,11 @@ module FastXlsx
   end
 
   # Cell value written as a hyperlink, e.g. URL.new("https://example.com").
-  URL = Data.define(:url) do
-    def initialize(url:)
-      super(url: url.to_s)
+  # text: shown in the cell instead of the URL itself.
+  # Subclassed (not a Data.define block) so .new can call super with keywords.
+  class URL < Data.define(:url, :text) # rubocop:disable Style/DataInheritance
+    def self.new(url, text: nil)
+      super(url: url.to_s, text: text&.to_s)
     end
   end
 

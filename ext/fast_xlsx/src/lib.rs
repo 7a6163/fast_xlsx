@@ -150,7 +150,11 @@ fn put(
         )
     } else if v.is_kind_of(ruby.get_inner(&URL)) {
         let url: String = v.funcall("url", ())?;
-        emit(ws, row, col, rust_xlsxwriter::Url::new(url), format)
+        let mut link = rust_xlsxwriter::Url::new(url);
+        if let Some(text) = v.funcall::<_, _, Option<String>>("text", ())? {
+            link = link.set_text(text);
+        }
+        emit(ws, row, col, link, format)
     } else if v.respond_to("jd", false)? {
         emit(ws, row, col, excel_date(v)?, format)
     } else {

@@ -78,6 +78,15 @@ class TestFastXlsx < Minitest::Test
     assert_equal "https://example.com/a", xlsx.cell(1, 1)
   end
 
+  def test_url_can_display_other_text
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [FastXlsx::URL.new("https://example.com/report/42", text: "Q3 report")]
+
+    xlsx = open_xlsx(wb)
+    assert_equal "https://example.com/report/42", xlsx.hyperlink(1, 1)
+    assert_equal "Q3 report", xlsx.cell(1, 1)
+  end
+
   def test_write_applies_bold_format
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

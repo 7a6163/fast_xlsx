@@ -144,7 +144,7 @@ Values are mapped by type:
 | `Time` | number (Excel serial date, local time) |
 | `Date`, `DateTime` | number (Excel serial date, own offset) |
 | `FastXlsx::Formula.new("SUM(A1:A9)")` | formula |
-| `FastXlsx::URL.new("https://…")` | hyperlink |
+| `FastXlsx::URL.new("https://…")`, `URL.new(url, text: "Title")` | hyperlink (optionally showing other text) |
 | `true` / `false` | boolean |
 | `nil` | empty cell |
 | anything else | `to_s` as string |

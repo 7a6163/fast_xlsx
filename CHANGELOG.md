@@ -20,3 +20,4 @@
 - `Worksheet#insert_image` from a path or IO, with scale, offsets and alt text
 - `Worksheet#insert_chart` (column, bar, line, area, stacked variants, pie, doughnut, radar, scatter) with titles, axis names and size
 - `autofit` keeps widths set with `set_column_width` (fast_excel #85)
+- `URL.new(url, text:)` shows other text in the cell (fast_excel #69)

@@ -17,7 +17,8 @@ module FastXlsx
 
   class URL
     attr_reader url: String
-    def self.new: (_ToS url) -> URL
+    attr_reader text: String?
+    def self.new: (_ToS url, ?text: _ToS?) -> URL
   end
 
   class Workbook
