@@ -1,5 +1,7 @@
 # FastXlsx
 
+[![codecov](https://codecov.io/gh/7a6163/fast_xlsx/graph/badge.svg)](https://codecov.io/gh/7a6163/fast_xlsx)
+
 Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
 > **Status: early.** Formats support bold / italic / underline / number formats only; colors, alignment, borders, column formats and charts are not implemented yet.
@@ -88,6 +90,17 @@ bundle exec rake compile   # build the Rust extension into lib/fast_xlsx/
 bundle exec rake test
 bundle exec rake           # compile + test + rubocop
 ```
+
+Coverage of the Rust extension while the Ruby tests run (needs [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) and `rustup component add llvm-tools-preview`):
+
+```bash
+rm -rf tmp lib/fast_xlsx/fast_xlsx.bundle           # force an instrumented rebuild
+eval "$(cargo llvm-cov show-env --export-prefix)"
+bundle exec rake compile test
+cargo llvm-cov report --release                     # or --lcov / --html
+```
+
+Rebuild in a clean shell afterwards (`rm -rf tmp && bundle exec rake compile`) so the everyday build is not instrumented.
 
 ## License
 

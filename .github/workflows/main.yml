@@ -35,3 +35,34 @@ jobs:
           rubygems: '4.0.10'
       - name: Run the default task
         run: bundle exec rake
+
+  coverage:
+    runs-on: ubuntu-latest
+    name: Coverage
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC upload, no token secret needed
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Ruby & Rust
+        uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+        with:
+          ruby-version: '4.0.5'
+          bundler-cache: true
+          rubygems: '4.0.10'
+          rustup-components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Measure Rust coverage while running the Ruby tests
+        run: |
+          eval "$(cargo llvm-cov show-env --export-prefix)"
+          bundle exec rake compile test
+          cargo llvm-cov report --release --lcov --output-path lcov.info
+      - uses: codecov/codecov-action@v7
+        with:
+          files: lcov.info
+          disable_search: true
+          use_oidc: true
+          fail_ci_if_error: true
