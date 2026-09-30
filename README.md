@@ -191,7 +191,7 @@ BUNDLE_GEMFILE=bench/Gemfile bundle exec ruby bench/compare.rb   # optional row 
 bundle add fast_xlsx
 ```
 
-Precompiled gems are built for common platforms; other platforms need a Rust toolchain to install.
+Precompiled gems are built for common platforms; other platforms need a Rust toolchain to install. Requires CRuby 3.3+; JRuby and TruffleRuby are not supported because this is a native extension.
 
 ## Development
 

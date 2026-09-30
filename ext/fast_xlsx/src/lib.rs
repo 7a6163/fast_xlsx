@@ -328,6 +328,24 @@ fn validation_rule<T: TryConvert + IntoDataValidationValue>(
     Ok(comparison_rule!(DataValidationRule, cmp, T::try_convert))
 }
 
+// Rejects option keys outside `allowed`, so a typo raises instead of being ignored.
+fn check_keys(ruby: &Ruby, options: RHash, allowed: &[&str], what: &str) -> Result<(), Error> {
+    options.foreach(|key: Symbol, _: Value| {
+        let name = key.name()?;
+        if allowed.contains(&&*name) {
+            Ok(ForEach::Continue)
+        } else {
+            Err(Error::new(
+                ruby.exception_arg_error(),
+                format!(
+                    "unknown {what} option: {name} (expected one of {})",
+                    allowed.join(", ")
+                ),
+            ))
+        }
+    })
+}
+
 const CHART_TYPES: &[(&str, ChartType)] = &[
     ("area", ChartType::Area),
     ("area_stacked", ChartType::AreaStacked),
@@ -671,6 +689,12 @@ impl Worksheet {
     ) -> Result<Obj<Self>, Error> {
         let nil = ruby.qnil().as_value();
         let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        check_keys(
+            ruby,
+            options,
+            &["type", "criteria", "value", "format", "colors"],
+            "conditional_format",
+        )?;
         let format = Option::<&Format>::try_convert(opt("format"))?;
         let value = opt("value");
         let kind = choice(
@@ -780,6 +804,20 @@ impl Worksheet {
     ) -> Result<Obj<Self>, Error> {
         let nil = ruby.qnil().as_value();
         let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        check_keys(
+            ruby,
+            options,
+            &[
+                "type",
+                "criteria",
+                "value",
+                "input_title",
+                "input_message",
+                "error_title",
+                "error_message",
+            ],
+            "data_validation",
+        )?;
         let (criteria, value) = (opt("criteria"), opt("value"));
         let dv = DataValidation::new();
         let mut dv = match choice(
@@ -852,6 +890,14 @@ impl Worksheet {
     ) -> Result<Obj<Self>, Error> {
         let nil = ruby.qnil().as_value();
         let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        check_keys(
+            ruby,
+            options,
+            &[
+                "scale", "width", "height", "x_offset", "y_offset", "alt_text",
+            ],
+            "insert_image",
+        )?;
         let offset = |name: &str| -> Result<u32, Error> {
             let v = opt(name);
             if v.is_nil() {
@@ -919,6 +965,14 @@ impl Worksheet {
             }
         };
         let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        check_keys(
+            ruby,
+            options,
+            &[
+                "type", "series", "title", "x_axis", "y_axis", "width", "height",
+            ],
+            "insert_chart",
+        )?;
 
         let mut chart = Chart::new(choice(ruby, "chart type", opt("type"), CHART_TYPES)?);
         let series = RArray::try_convert(opt("series"))?;
@@ -929,6 +983,7 @@ impl Worksheet {
         }
         for s in series.into_iter() {
             let s = RHash::try_convert(s)?;
+            check_keys(ruby, s, &["values", "categories", "name"], "chart series")?;
             let get = |name: &str| s.get(ruby.to_symbol(name)).unwrap_or(nil);
             let values = text(get("values"))?
                 .ok_or_else(|| arg_error(format!("series {} needs values:", s.inspect())))?;

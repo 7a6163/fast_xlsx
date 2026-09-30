@@ -590,6 +590,21 @@ class TestFastXlsx < Minitest::Test
     assert_raises(ArgumentError) { ws.insert_chart(0, 0, type: :column, series: []) }
   end
 
+  def test_option_typos_raise_instead_of_being_ignored
+    ws = FastXlsx::Workbook.new.add_worksheet
+    png = -> { StringIO.new(PNG_1X1) }
+    {
+      "formt" => -> { ws.conditional_format(0, 0, 0, 0, type: :data_bar, formt: nil) },
+      "error_msg" => -> { ws.data_validation(0, 0, 0, 0, type: :list, value: %w[a], error_msg: "x") },
+      "scael" => -> { ws.insert_image(0, 0, png.call, scael: 2) },
+      "titel" => -> { ws.insert_chart(0, 0, type: :line, series: [SALES_SERIES], titel: "x") },
+      "valeus" => -> { ws.insert_chart(0, 0, type: :line, series: [{ values: "Sheet1!$B$2:$B$4", valeus: "x" }]) }
+    }.each do |typo, call|
+      error = assert_raises(ArgumentError, typo, &call)
+      assert_includes error.message, typo
+    end
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"
