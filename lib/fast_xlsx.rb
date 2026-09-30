@@ -84,6 +84,11 @@ module FastXlsx
       worksheets.find { |ws| ws.name == name }
     end
 
+    # path: a String, Pathname or anything responding to #to_path.
+    def save(path)
+      _save(File.path(path))
+    end
+
     # Document properties shown in Excel's File > Info: title:, subject:,
     # author:, manager:, company:, category:, keywords:, comments:, status:.
     # Later calls add to earlier ones.

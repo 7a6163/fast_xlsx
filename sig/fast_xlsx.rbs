@@ -36,7 +36,7 @@ module FastXlsx
                      ?company: String, ?category: String, ?keywords: String,
                      ?comments: String, ?status: String) -> self
     def to_xlsx: () -> String
-    def save: (String path) -> void
+    def save: (String | _ToPath path) -> void
   end
 
   class Format

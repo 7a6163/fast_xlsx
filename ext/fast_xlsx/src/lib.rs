@@ -1465,7 +1465,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     wb.define_singleton_method("_new", function!(Workbook::new, 2))?;
     wb.define_method("_add_worksheet", method!(Workbook::add_worksheet, 1))?;
     wb.define_method("to_xlsx", method!(Workbook::to_xlsx, 0))?;
-    wb.define_method("save", method!(Workbook::save, 1))?;
+    wb.define_method("_save", method!(Workbook::save, 1))?;
     wb.define_method("_properties", method!(Workbook::set_properties, 1))?;
 
     let ws = module.define_class("Worksheet", ruby.class_object())?;

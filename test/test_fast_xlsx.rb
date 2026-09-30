@@ -3,6 +3,7 @@
 require "test_helper"
 require "date"
 require "fileutils"
+require "pathname"
 require "tmpdir"
 
 class TestFastXlsx < Minitest::Test
@@ -1084,6 +1085,17 @@ class TestFastXlsx < Minitest::Test
       wb.save(path)
 
       assert_equal "saved", Roo::Excelx.new(path).cell(1, 1)
+    end
+  end
+
+  def test_save_accepts_a_pathname
+    Dir.mktmpdir do |dir|
+      path = Pathname.new(dir).join("out.xlsx")
+      wb = FastXlsx::Workbook.new
+      wb.add_worksheet << ["saved"]
+      wb.save(path)
+
+      assert_equal "saved", Roo::Excelx.new(path.to_s).cell(1, 1)
     end
   end
 end
