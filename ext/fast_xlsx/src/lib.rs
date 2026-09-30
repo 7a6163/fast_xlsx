@@ -569,6 +569,16 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn set_page_breaks(rb_self: Obj<Self>, rows: Vec<u32>) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| ws.set_page_breaks(&rows).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
+    fn set_vertical_page_breaks(rb_self: Obj<Self>, cols: Vec<u32>) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| ws.set_vertical_page_breaks(&cols).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
     // rust_xlsxwriter only merges with a string, so merge with "" and then write
     // the value into the first cell, which keeps its type.
     #[allow(clippy::too_many_arguments)]
@@ -933,6 +943,11 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("_data_validation", method!(Worksheet::data_validation, 5))?;
     ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
     ws.define_method("set_row_height", method!(Worksheet::set_row_height, 2))?;
+    ws.define_method("set_page_breaks", method!(Worksheet::set_page_breaks, 1))?;
+    ws.define_method(
+        "set_vertical_page_breaks",
+        method!(Worksheet::set_vertical_page_breaks, 1),
+    )?;
     ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;
 
     let format = module.define_class("Format", ruby.class_object())?;

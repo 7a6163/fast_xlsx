@@ -21,3 +21,8 @@ Style/ConcatArrayLiterals:
 # Range methods take four coordinates (first_row, first_col, last_row, last_col) plus a value or options.
 Metrics/ParameterLists:
   Max: 6
+
+# assert_equal expected, list.map { ... } is unambiguous in practice.
+Lint/AmbiguousBlockAssociation:
+  Exclude:
+    - test/**/*

@@ -304,6 +304,17 @@ class TestFastXlsx < Minitest::Test
     assert_match(/<row r="1"[^>]* ht="30" customHeight="1"/, sheet_xml(wb))
   end
 
+  def test_page_breaks
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.set_page_breaks([20, 40])
+    ws.set_vertical_page_breaks([5])
+
+    xml = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!
+    assert_equal %w[20 40], xml.css("rowBreaks brk").map { |b| b["id"] }
+    assert_equal %w[5], xml.css("colBreaks brk").map { |b| b["id"] }
+  end
+
   def test_worksheet_by_name_returns_the_same_worksheet
     wb = FastXlsx::Workbook.new
     data = wb.add_worksheet("Data")

@@ -56,6 +56,8 @@ module FastXlsx
     def autofilter: (Integer first_row, Integer first_col, Integer last_row, Integer last_col) -> self
     def freeze_panes: (Integer row, Integer col) -> self
     def set_row_height: (Integer row, Numeric height) -> self
+    def set_page_breaks: (Array[Integer] rows) -> self
+    def set_vertical_page_breaks: (Array[Integer] cols) -> self
     def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?Format? format) -> self
     def conditional_format: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
                              type: :cell | :text | :formula | :data_bar | :color_scale,

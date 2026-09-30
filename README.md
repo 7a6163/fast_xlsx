@@ -68,6 +68,8 @@ ws.autofilter(0, 0, 100, 3)       # filter buttons on A1:D101 (first_row, first_
 ws.freeze_panes(1, 0)                          # keep the first row visible while scrolling
 ws.set_row_height(0, 30)                       # row 1, height in points
 ws.merge_range(0, 0, 0, 3, "Q3 report", title) # merge A1:D1; the value can be any cell type
+ws.set_page_breaks([50, 100])                  # print a new page before rows 51 and 101
+ws.set_vertical_page_breaks([8])               # and before column I
 ```
 
 ### Conditional formats
