@@ -163,19 +163,33 @@ impl Workbook {
     }
 }
 
-// Excel stores datetimes as days since 1900-01-01 in local time.
+// Excel serial date from days (and fraction) since 1899-12-30. Excel's 1900
+// date system counts a non-existent 1900-02-29 (serial 60), so real dates
+// before 1900-03-01 are one lower; it has no dates before 1900-01-01.
+fn excel_serial(days: f64) -> Result<f64, Error> {
+    if days < 2.0 {
+        let ruby = Ruby::get().unwrap();
+        return Err(Error::new(
+            ruby.exception_arg_error(),
+            "Excel cannot represent dates before 1900-01-01",
+        ));
+    }
+    Ok(if days < 61.0 { days - 1.0 } else { days })
+}
+
+// Time: seconds since 1970-01-01 (serial day 25569), in its own offset.
 fn excel_time(v: Value) -> Result<f64, Error> {
     let secs: f64 = v.funcall("to_f", ())?;
     let offset: i64 = v.funcall("utc_offset", ())?;
-    Ok((secs + offset as f64) / 86400.0 + 25569.0)
+    excel_serial((secs + offset as f64) / 86400.0 + 25569.0)
 }
 
 // Date / DateTime: Julian day and day fraction are both in the object's own
-// offset. JD 2415019 is Excel serial 0 (1899-12-30).
+// offset. JD 2415019 is 1899-12-30.
 fn excel_date(v: Value) -> Result<f64, Error> {
     let jd: i64 = v.funcall("jd", ())?;
     let fraction: f64 = f64::try_convert(v.funcall("day_fraction", ())?)?;
-    Ok((jd - 2_415_019) as f64 + fraction)
+    excel_serial((jd - 2_415_019) as f64 + fraction)
 }
 
 fn emit<T: IntoExcelData>(

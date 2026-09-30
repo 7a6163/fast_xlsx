@@ -77,6 +77,23 @@ class TestFastXlsx < Minitest::Test
     assert_equal [[36_526]], rows(wb)
   end
 
+  # Excel's 1900 date system includes a non-existent 1900-02-29 (serial 60),
+  # so real dates before 1900-03-01 are one serial lower.
+  def test_dates_before_1900_03_01_match_excel_serials
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [Date.new(1900, 1, 1), Date.new(1900, 2, 28), Date.new(1900, 3, 1),
+                         Time.utc(1900, 1, 1, 12), Time.utc(1900, 3, 1, 12)]
+
+    assert_equal [[1, 59, 61, 1.5, 61.5]], rows(wb)
+  end
+
+  def test_dates_before_1900_raise
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws << [Date.new(1899, 12, 31)] }
+    assert_includes error.message, "1900"
+    assert_raises(ArgumentError) { ws << [Time.utc(1850, 6, 1)] }
+  end
+
   def test_datetime_uses_its_own_wall_clock_time
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [DateTime.new(2000, 1, 1, 18, 0, 0, "+08:00")]
