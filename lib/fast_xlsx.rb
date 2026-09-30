@@ -52,6 +52,11 @@ module FastXlsx
       self
     end
 
+    # Merges the range and writes value (any cell type) into its first cell.
+    def merge_range(first_row, first_col, last_row, last_col, value, format = nil) # rubocop:disable Metrics/ParameterLists
+      _merge_range(first_row, first_col, last_row, last_col, value, format)
+    end
+
     # Default format for cells in these columns that are written without one.
     def set_column_format(columns, format)
       _set_column_format(*column_bounds(columns), format)

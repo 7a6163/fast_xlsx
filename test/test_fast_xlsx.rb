@@ -253,6 +253,34 @@ class TestFastXlsx < Minitest::Test
     assert_equal "#,##0.00", xlsx.excelx_format(1, 3)
   end
 
+  def test_freeze_panes_freezes_rows_above_and_columns_left
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.freeze_panes(1, 2)
+
+    pane = sheet_xml(wb)[/<pane [^>]*>/]
+    assert_match(/xSplit="2"/, pane)
+    assert_match(/ySplit="1"/, pane)
+    assert_match(/state="frozen"/, pane)
+  end
+
+  def test_merge_range_merges_cells_and_writes_the_value
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.merge_range(0, 0, 0, 2, 1234, FastXlsx::Format.new(bold: true))
+
+    assert_match(/<mergeCell ref="A1:C1"/, sheet_xml(wb))
+    assert_equal 1234, open_xlsx(wb).cell(1, 1)
+    assert_predicate open_xlsx(wb).font(1, 1), :bold?
+  end
+
+  def test_set_row_height
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.set_row_height(0, 30)
+    ws << ["tall"]
+
+    assert_match(/<row r="1"[^>]* ht="30" customHeight="1"/, sheet_xml(wb))
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

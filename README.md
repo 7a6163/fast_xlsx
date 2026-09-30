@@ -57,6 +57,14 @@ ws.autofilter(0, 0, 100, 3)       # filter buttons on A1:D101 (first_row, first_
 
 `autofit` only sees rows still in memory, so it has no effect on rows already flushed in `constant_memory` mode.
 
+### Layout
+
+```ruby
+ws.freeze_panes(1, 0)                          # keep the first row visible while scrolling
+ws.set_row_height(0, 30)                       # row 1, height in points
+ws.merge_range(0, 0, 0, 3, "Q3 report", title) # merge A1:D1; the value can be any cell type
+```
+
 Values are mapped by type:
 
 | Ruby | Excel |

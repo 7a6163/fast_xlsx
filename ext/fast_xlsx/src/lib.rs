@@ -405,6 +405,40 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn freeze_panes(rb_self: Obj<Self>, row: u32, col: u16) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| ws.set_freeze_panes(row, col).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
+    fn set_row_height(rb_self: Obj<Self>, row: u32, height: f64) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| ws.set_row_height(row, height).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
+    // rust_xlsxwriter only merges with a string, so merge with "" and then write
+    // the value into the first cell, which keeps its type.
+    #[allow(clippy::too_many_arguments)]
+    fn merge_range(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        first_row: u32,
+        first_col: u16,
+        last_row: u32,
+        last_col: u16,
+        v: Value,
+        format: Option<&Format>,
+    ) -> Result<Obj<Self>, Error> {
+        let default = rust_xlsxwriter::Format::new();
+        let merge_format = format.map_or(&default, |f| &f.0);
+        rb_self.with_ws(|ws| {
+            ws.merge_range(first_row, first_col, last_row, last_col, "", merge_format)
+                .map_err(xerr)?;
+            put(ruby, ws, first_row, first_col, v, format)
+        })?;
+        rb_self.advance(last_row);
+        Ok(rb_self)
+    }
+
     fn next_row(&self) -> u32 {
         self.next_row.get()
     }
@@ -430,6 +464,9 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     ws.define_method("autofit", method!(Worksheet::autofit, 0))?;
     ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
+    ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
+    ws.define_method("set_row_height", method!(Worksheet::set_row_height, 2))?;
+    ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;
 
     let format = module.define_class("Format", ruby.class_object())?;
     format.define_singleton_method("_new", function!(Format::new, 1))?;
