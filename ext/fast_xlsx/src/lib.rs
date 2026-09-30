@@ -595,6 +595,36 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn set_header(&self, text: String) -> Result<(), Error> {
+        self.with_ws(|ws| {
+            ws.set_header(text);
+            Ok(())
+        })
+    }
+
+    fn set_footer(&self, text: String) -> Result<(), Error> {
+        self.with_ws(|ws| {
+            ws.set_footer(text);
+            Ok(())
+        })
+    }
+
+    // Inches; a negative value keeps the current margin.
+    fn set_margins(
+        &self,
+        left: f64,
+        right: f64,
+        top: f64,
+        bottom: f64,
+        header: f64,
+        footer: f64,
+    ) -> Result<(), Error> {
+        self.with_ws(|ws| {
+            ws.set_margins(left, right, top, bottom, header, footer);
+            Ok(())
+        })
+    }
+
     fn set_page_breaks(rb_self: Obj<Self>, rows: Vec<u32>) -> Result<Obj<Self>, Error> {
         rb_self.with_ws(|ws| ws.set_page_breaks(&rows).map(|_| ()).map_err(xerr))?;
         Ok(rb_self)
@@ -971,6 +1001,9 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
     ws.define_method("set_row_height", method!(Worksheet::set_row_height, 2))?;
     ws.define_method("set_page_breaks", method!(Worksheet::set_page_breaks, 1))?;
+    ws.define_method("_set_header", method!(Worksheet::set_header, 1))?;
+    ws.define_method("_set_footer", method!(Worksheet::set_footer, 1))?;
+    ws.define_method("_set_margins", method!(Worksheet::set_margins, 6))?;
     ws.define_method(
         "set_vertical_page_breaks",
         method!(Worksheet::set_vertical_page_breaks, 1),

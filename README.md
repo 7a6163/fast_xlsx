@@ -71,6 +71,9 @@ ws.set_row_height(0, 30)                       # row 1, height in points
 ws.merge_range(0, 0, 0, 3, "Q3 report", title) # merge A1:D1; the value can be any cell type
 ws.set_page_breaks([50, 100])                  # print a new page before rows 51 and 101
 ws.set_vertical_page_breaks([8])               # and before column I
+ws.set_header("&CPage &P of &N")               # printed header, Excel header/footer codes
+ws.set_footer("&L&A", margin: 0.2)             # sheet name on the left; margin in inches
+ws.set_margins(left: 0.5, top: 1)              # other margins keep Excel's defaults
 ```
 
 ### Conditional formats

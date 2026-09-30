@@ -304,6 +304,25 @@ class TestFastXlsx < Minitest::Test
     assert_match(/<row r="1"[^>]* ht="30" customHeight="1"/, sheet_xml(wb))
   end
 
+  def test_header_and_footer_with_margin
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.set_header("&CPage &P of &N")
+    ws.set_footer("&L&A", margin: 0.2)
+
+    xml = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!
+    assert_equal ["&CPage &P of &N", "&L&A"], [xml.at("oddHeader").text, xml.at("oddFooter").text]
+    assert_equal "0.2", xml.at("pageMargins")["footer"]
+  end
+
+  def test_set_margins_keeps_defaults_for_the_rest
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.set_margins(left: 0.5, top: 1)
+
+    margins = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.at("pageMargins")
+    assert_equal %w[0.5 0.7 1 0.75], %w[left right top bottom].map { |side| margins[side] }
+  end
+
   def test_page_breaks
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

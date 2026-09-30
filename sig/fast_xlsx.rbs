@@ -61,6 +61,10 @@ module FastXlsx
     def set_row_height: (Integer row, Numeric height) -> self
     def set_page_breaks: (Array[Integer] rows) -> self
     def set_vertical_page_breaks: (Array[Integer] cols) -> self
+    def set_header: (String text, ?margin: Numeric?) -> self
+    def set_footer: (String text, ?margin: Numeric?) -> self
+    def set_margins: (?left: Numeric?, ?right: Numeric?, ?top: Numeric?, ?bottom: Numeric?,
+                      ?header: Numeric?, ?footer: Numeric?) -> self
     def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?Format? format) -> self
     def conditional_format: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
                              type: :cell | :text | :formula | :data_bar | :color_scale,

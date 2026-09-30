@@ -118,6 +118,24 @@ module FastXlsx
       _insert_chart(row, col, { type: type, series: series, ** })
     end
 
+    # Printed page header/footer using Excel codes such as "&CPage &P of &N".
+    # margin: is in inches.
+    def set_header(text, margin: nil)
+      _set_header(text)
+      margin ? set_margins(header: margin) : self
+    end
+
+    def set_footer(text, margin: nil)
+      _set_footer(text)
+      margin ? set_margins(footer: margin) : self
+    end
+
+    # Print margins in inches; margins not given keep their current value.
+    def set_margins(left: nil, right: nil, top: nil, bottom: nil, header: nil, footer: nil)
+      _set_margins(*[left, right, top, bottom, header, footer].map { |m| m || -1.0 })
+      self
+    end
+
     # Default format for cells in these columns that are written without one.
     def set_column_format(columns, format)
       _set_column_format(*column_bounds(columns), format)
