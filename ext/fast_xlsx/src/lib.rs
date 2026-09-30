@@ -154,75 +154,98 @@ fn emit<T: IntoExcelData>(
     .map_err(xerr)
 }
 
-// RichString#segments is [[text, Format or nil], ...]; nil means the default font.
-fn write_rich_string(
-    ws: &mut rust_xlsxwriter::Worksheet,
-    row: u32,
-    col: u16,
-    v: Value,
-    format: Option<&Format>,
-) -> Result<(), Error> {
-    let default = rust_xlsxwriter::Format::default();
-    let segments: RArray = v.funcall("segments", ())?;
-    let mut parts: Vec<(Option<&Format>, String)> = Vec::with_capacity(segments.len());
-    for segment in segments.into_iter() {
-        let (text, seg_format): (String, Value) = TryConvert::try_convert(segment)?;
-        parts.push((Option::<&Format>::try_convert(seg_format)?, text));
-    }
-    let rich: Vec<(&rust_xlsxwriter::Format, &str)> = parts
-        .iter()
-        .map(|(f, text)| (f.map_or(&default, |f| &f.0), text.as_str()))
-        .collect();
-    match format {
-        Some(f) => ws.write_rich_string_with_format(row, col, &rich, &f.0),
-        None => ws.write_rich_string(row, col, &rich),
-    }
-    .map(|_| ())
-    .map_err(xerr)
+// A cell value converted from Ruby. Converting may run Ruby code (to_s, jd,
+// url, ...), so it happens before the workbook lock is taken: Ruby code that
+// touches the same workbook, or another thread, would otherwise deadlock on it.
+// Writing a CellValue runs no Ruby code.
+enum CellValue {
+    Empty,
+    // A Ruby String, borrowed only while writing (no Ruby code runs then).
+    RubyStr(RString),
+    Text(String),
+    Number(f64),
+    Bool(bool),
+    Formula(String),
+    Url(String, Option<String>),
+    // RichString segments; a nil format means the default font.
+    Rich(Vec<(Option<&'static Format>, String)>),
 }
 
-fn put(
-    ruby: &Ruby,
-    ws: &mut rust_xlsxwriter::Worksheet,
-    row: u32,
-    col: u16,
-    v: Value,
-    format: Option<&Format>,
-) -> Result<(), Error> {
-    if v.is_nil() {
-        Ok(())
-    } else if let Some(s) = RString::from_value(v) {
-        // SAFETY: the borrowed str is copied by the writer before any Ruby code runs.
-        emit(ws, row, col, unsafe { s.as_str()? }, format)
-    } else if v.is_kind_of(ruby.class_numeric()) {
-        emit(ws, row, col, f64::try_convert(v)?, format)
-    } else if v.is_kind_of(ruby.class_time()) {
-        emit(ws, row, col, excel_time(v)?, format)
-    } else if v.is_kind_of(ruby.class_true_class()) || v.is_kind_of(ruby.class_false_class()) {
-        emit(ws, row, col, v.to_bool(), format)
-    } else if v.is_kind_of(ruby.get_inner(&FORMULA)) {
-        let expression: String = v.funcall("expression", ())?;
-        emit(
-            ws,
-            row,
-            col,
-            rust_xlsxwriter::Formula::new(expression),
-            format,
-        )
-    } else if v.is_kind_of(ruby.get_inner(&URL)) {
-        let url: String = v.funcall("url", ())?;
-        let mut link = rust_xlsxwriter::Url::new(url);
-        if let Some(text) = v.funcall::<_, _, Option<String>>("text", ())? {
-            link = link.set_text(text);
+impl CellValue {
+    fn from_ruby(ruby: &Ruby, v: Value) -> Result<Self, Error> {
+        Ok(if v.is_nil() {
+            CellValue::Empty
+        } else if let Some(s) = RString::from_value(v) {
+            CellValue::RubyStr(s)
+        } else if v.is_kind_of(ruby.class_numeric()) {
+            CellValue::Number(f64::try_convert(v)?)
+        } else if v.is_kind_of(ruby.class_time()) {
+            CellValue::Number(excel_time(v)?)
+        } else if v.is_kind_of(ruby.class_true_class()) || v.is_kind_of(ruby.class_false_class()) {
+            CellValue::Bool(v.to_bool())
+        } else if v.is_kind_of(ruby.get_inner(&FORMULA)) {
+            CellValue::Formula(v.funcall("expression", ())?)
+        } else if v.is_kind_of(ruby.get_inner(&URL)) {
+            CellValue::Url(v.funcall("url", ())?, v.funcall("text", ())?)
+        } else if v.is_kind_of(ruby.get_inner(&RICH_STRING)) {
+            let segments: RArray = v.funcall("segments", ())?;
+            let mut parts = Vec::with_capacity(segments.len());
+            each_entry(segments, |_, segment| {
+                let (text, seg_format): (String, Value) = TryConvert::try_convert(segment)?;
+                parts.push((Option::<&Format>::try_convert(seg_format)?, text));
+                Ok(())
+            })?;
+            CellValue::Rich(parts)
+        } else if v.respond_to("jd", false)? {
+            CellValue::Number(excel_date(v)?)
+        } else {
+            CellValue::Text(v.funcall("to_s", ())?)
+        })
+    }
+
+    fn write(
+        &self,
+        ws: &mut rust_xlsxwriter::Worksheet,
+        row: u32,
+        col: u16,
+        format: Option<&Format>,
+    ) -> Result<(), Error> {
+        match self {
+            CellValue::Empty => Ok(()),
+            // SAFETY: nothing between this borrow and the writer copying the
+            // text runs Ruby code, so the string cannot change or be freed.
+            CellValue::RubyStr(s) => emit(ws, row, col, unsafe { s.as_str()? }, format),
+            CellValue::Text(s) => emit(ws, row, col, s.as_str(), format),
+            CellValue::Number(n) => emit(ws, row, col, *n, format),
+            CellValue::Bool(b) => emit(ws, row, col, *b, format),
+            CellValue::Formula(f) => emit(
+                ws,
+                row,
+                col,
+                rust_xlsxwriter::Formula::new(f.as_str()),
+                format,
+            ),
+            CellValue::Url(url, text) => {
+                let mut link = rust_xlsxwriter::Url::new(url.as_str());
+                if let Some(text) = text {
+                    link = link.set_text(text.as_str());
+                }
+                emit(ws, row, col, link, format)
+            }
+            CellValue::Rich(parts) => {
+                let default = rust_xlsxwriter::Format::default();
+                let rich: Vec<(&rust_xlsxwriter::Format, &str)> = parts
+                    .iter()
+                    .map(|(f, text)| (f.map_or(&default, |f| &f.0), text.as_str()))
+                    .collect();
+                match format {
+                    Some(f) => ws.write_rich_string_with_format(row, col, &rich, &f.0),
+                    None => ws.write_rich_string(row, col, &rich),
+                }
+                .map(|_| ())
+                .map_err(xerr)
+            }
         }
-        emit(ws, row, col, link, format)
-    } else if v.is_kind_of(ruby.get_inner(&RICH_STRING)) {
-        write_rich_string(ws, row, col, v, format)
-    } else if v.respond_to("jd", false)? {
-        emit(ws, row, col, excel_date(v)?, format)
-    } else {
-        let s: String = v.funcall("to_s", ())?;
-        emit(ws, row, col, s, format)
     }
 }
 
@@ -704,12 +727,20 @@ impl Worksheet {
         cells: RArray,
         format: &RowFormat,
     ) -> Result<(), Error> {
+        // Convert the whole row first: no lock is held while Ruby code runs,
+        // and a value that fails to convert leaves the row unwritten.
+        let mut values = Vec::with_capacity(cells.len());
+        each_entry(cells, |i, v| {
+            let col = u16::try_from(i)
+                .map_err(|_| Error::new(ruby.exception_arg_error(), "too many columns"))?;
+            values.push((col, CellValue::from_ruby(ruby, v)?, format.at(i)?));
+            Ok(())
+        })?;
         self.with_ws(|ws| {
-            each_entry(cells, |i, v| {
-                let col = u16::try_from(i)
-                    .map_err(|_| Error::new(ruby.exception_arg_error(), "too many columns"))?;
-                put(ruby, ws, row, col, v, format.at(i)?)
-            })
+            for (col, value, format) in &values {
+                value.write(ws, row, *col, *format)?;
+            }
+            Ok(())
         })?;
         self.advance(row);
         Ok(())
@@ -724,7 +755,8 @@ impl Worksheet {
         format: Option<&Format>,
     ) -> Result<(), Error> {
         rb_self.check_not_flushed(ruby, row)?;
-        rb_self.with_ws(|ws| put(ruby, ws, row, col, v, format))?;
+        let value = CellValue::from_ruby(ruby, v)?;
+        rb_self.with_ws(|ws| value.write(ws, row, col, format))?;
         rb_self.advance(row);
         Ok(())
     }
@@ -859,10 +891,11 @@ impl Worksheet {
     ) -> Result<Obj<Self>, Error> {
         let default = rust_xlsxwriter::Format::new();
         let merge_format = format.map_or(&default, |f| &f.0);
+        let value = CellValue::from_ruby(ruby, v)?;
         rb_self.with_ws(|ws| {
             ws.merge_range(first_row, first_col, last_row, last_col, "", merge_format)
                 .map_err(xerr)?;
-            put(ruby, ws, first_row, first_col, v, format)
+            value.write(ws, first_row, first_col, format)
         })?;
         rb_self.advance(last_row);
         Ok(rb_self)
@@ -900,85 +933,92 @@ impl Worksheet {
                 ("color_scale", "color_scale"),
             ],
         )?;
+        // Built before taking the lock: building converts Ruby values.
+        enum Rule {
+            Cell(ConditionalFormatCell),
+            Text(ConditionalFormatText),
+            Formula(ConditionalFormatFormula),
+            DataBar,
+            TwoColorScale,
+            ThreeColorScale,
+        }
+        let rule = match kind {
+            "cell" => {
+                let mut cf =
+                    ConditionalFormatCell::new().set_rule(cell_rule(ruby, opt("criteria"), value)?);
+                if let Some(f) = format {
+                    cf = cf.set_format(&f.0);
+                }
+                Rule::Cell(cf)
+            }
+            "text" => {
+                let text = String::try_convert(value)?;
+                let text_rule = match choice(
+                    ruby,
+                    "text criteria",
+                    opt("criteria"),
+                    &[
+                        ("contains", 0),
+                        ("not_contains", 1),
+                        ("begins_with", 2),
+                        ("ends_with", 3),
+                    ],
+                )? {
+                    0 => ConditionalFormatTextRule::Contains(text),
+                    1 => ConditionalFormatTextRule::DoesNotContain(text),
+                    2 => ConditionalFormatTextRule::BeginsWith(text),
+                    _ => ConditionalFormatTextRule::EndsWith(text),
+                };
+                let mut cf = ConditionalFormatText::new().set_rule(text_rule);
+                if let Some(f) = format {
+                    cf = cf.set_format(&f.0);
+                }
+                Rule::Text(cf)
+            }
+            "formula" => {
+                let mut cf =
+                    ConditionalFormatFormula::new().set_rule(String::try_convert(value)?.as_str());
+                if let Some(f) = format {
+                    cf = cf.set_format(&f.0);
+                }
+                Rule::Formula(cf)
+            }
+            "data_bar" => Rule::DataBar,
+            _ => {
+                let colors = if opt("colors").is_nil() {
+                    3
+                } else {
+                    u8::try_convert(opt("colors"))?
+                };
+                match colors {
+                    2 => Rule::TwoColorScale,
+                    3 => Rule::ThreeColorScale,
+                    n => {
+                        return Err(Error::new(
+                            ruby.exception_arg_error(),
+                            format!("invalid colors {n}: use 2 or 3"),
+                        ))
+                    }
+                }
+            }
+        };
         rb_self.with_ws(|ws| {
-            let r = match kind {
-                "cell" => {
-                    let mut cf = ConditionalFormatCell::new().set_rule(cell_rule(
-                        ruby,
-                        opt("criteria"),
-                        value,
-                    )?);
-                    if let Some(f) = format {
-                        cf = cf.set_format(&f.0);
-                    }
-                    ws.add_conditional_format(fr, fc, lr, lc, &cf)
-                }
-                "text" => {
-                    let text = String::try_convert(value)?;
-                    let rule = match choice(
-                        ruby,
-                        "text criteria",
-                        opt("criteria"),
-                        &[
-                            ("contains", 0),
-                            ("not_contains", 1),
-                            ("begins_with", 2),
-                            ("ends_with", 3),
-                        ],
-                    )? {
-                        0 => ConditionalFormatTextRule::Contains(text),
-                        1 => ConditionalFormatTextRule::DoesNotContain(text),
-                        2 => ConditionalFormatTextRule::BeginsWith(text),
-                        _ => ConditionalFormatTextRule::EndsWith(text),
-                    };
-                    let mut cf = ConditionalFormatText::new().set_rule(rule);
-                    if let Some(f) = format {
-                        cf = cf.set_format(&f.0);
-                    }
-                    ws.add_conditional_format(fr, fc, lr, lc, &cf)
-                }
-                "formula" => {
-                    let mut cf = ConditionalFormatFormula::new()
-                        .set_rule(String::try_convert(value)?.as_str());
-                    if let Some(f) = format {
-                        cf = cf.set_format(&f.0);
-                    }
-                    ws.add_conditional_format(fr, fc, lr, lc, &cf)
-                }
-                "data_bar" => {
+            match &rule {
+                Rule::Cell(cf) => ws.add_conditional_format(fr, fc, lr, lc, cf),
+                Rule::Text(cf) => ws.add_conditional_format(fr, fc, lr, lc, cf),
+                Rule::Formula(cf) => ws.add_conditional_format(fr, fc, lr, lc, cf),
+                Rule::DataBar => {
                     ws.add_conditional_format(fr, fc, lr, lc, &ConditionalFormatDataBar::new())
                 }
-                _ => {
-                    let colors = if opt("colors").is_nil() {
-                        3
-                    } else {
-                        u8::try_convert(opt("colors"))?
-                    };
-                    match colors {
-                        2 => ws.add_conditional_format(
-                            fr,
-                            fc,
-                            lr,
-                            lc,
-                            &ConditionalFormat2ColorScale::new(),
-                        ),
-                        3 => ws.add_conditional_format(
-                            fr,
-                            fc,
-                            lr,
-                            lc,
-                            &ConditionalFormat3ColorScale::new(),
-                        ),
-                        n => {
-                            return Err(Error::new(
-                                ruby.exception_arg_error(),
-                                format!("invalid colors {n}: use 2 or 3"),
-                            ))
-                        }
-                    }
+                Rule::TwoColorScale => {
+                    ws.add_conditional_format(fr, fc, lr, lc, &ConditionalFormat2ColorScale::new())
                 }
-            };
-            r.map(|_| ()).map_err(xerr)
+                Rule::ThreeColorScale => {
+                    ws.add_conditional_format(fr, fc, lr, lc, &ConditionalFormat3ColorScale::new())
+                }
+            }
+            .map(|_| ())
+            .map_err(xerr)
         })?;
         Ok(rb_self)
     }

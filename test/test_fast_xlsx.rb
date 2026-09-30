@@ -781,6 +781,44 @@ class TestFastXlsx < Minitest::Test
     assert_equal [[2]], rows(wb, "two")
   end
 
+  # Cell values are converted with Ruby calls (to_s, jd, ...). If the workbook
+  # lock were held during those calls, Ruby code touching the same workbook
+  # would deadlock the process, so this runs in a child process with a timeout.
+  def test_ruby_called_during_a_write_can_use_the_same_workbook
+    script = <<~'RUBY'
+      require "fast_xlsx"
+      ws = FastXlsx::Workbook.new.add_worksheet
+      label = Object.new
+      label.define_singleton_method(:to_s) { "sheet #{ws.name}" }
+      ws << [label]
+      ws.write(1, 0, label)
+      ws.merge_range(2, 0, 2, 1, label)
+      print "ok"
+    RUBY
+    reader, writer = IO.pipe
+    pid = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script, out: writer)
+    writer.close
+    deadline = Time.now + 15
+    sleep 0.1 until (done = Process.wait2(pid, Process::WNOHANG)) || Time.now > deadline
+    unless done
+      Process.kill(:KILL, pid)
+      Process.wait(pid)
+      flunk "deadlocked: writing a value whose to_s reads the worksheet did not finish in 15s"
+    end
+    assert_equal "ok", reader.read
+  end
+
+  def test_a_row_that_fails_midway_writes_nothing
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    bad = Object.new
+    def bad.to_s = raise(ArgumentError, "boom")
+    assert_raises(ArgumentError) { ws << [4, 5, bad] }
+    ws << [9]
+
+    assert_equal [[9]], rows(wb)
+  end
+
   # Iterating a row must not dup it: dup'ing an Array longer than 3 elements
   # turns the caller's array into a shared root, one extra live object per row.
   def test_writing_rows_does_not_retain_ruby_objects
