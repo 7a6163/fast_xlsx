@@ -485,6 +485,15 @@ class TestFastXlsx < Minitest::Test
     assert_equal %w[list $Z$1:$Z$3], data_validations(wb).first.values_at(:type, :formula1)
   end
 
+  def test_data_validation_list_of_numbers_and_mixed_values
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.data_validation(0, 0, 0, 0, type: :list, value: [1, 2, 3])
+    ws.data_validation(0, 1, 0, 1, type: :list, value: [1.5, "N/A", :other])
+
+    assert_equal ['"1,2,3"', '"1.5,N/A,other"'], data_validations(wb).map { |dv| dv[:formula1] }
+  end
+
   def test_data_validation_number_rules
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

@@ -1128,9 +1128,16 @@ impl Worksheet {
             ],
         )? {
             "list" => match RArray::from_value(value) {
-                Some(items) => dv
-                    .allow_list_strings(&items.to_vec::<String>()?)
-                    .map_err(xerr)?,
+                // Items are shown as text in the dropdown, so numbers and
+                // symbols are listed by their to_s.
+                Some(items) => {
+                    let mut labels = Vec::with_capacity(items.len());
+                    each_entry(items, |_, item| {
+                        labels.push(item.funcall::<_, _, String>("to_s", ())?);
+                        Ok(())
+                    })?;
+                    dv.allow_list_strings(&labels).map_err(xerr)?
+                }
                 None => dv
                     .allow_list_formula(rust_xlsxwriter::Formula::new(String::try_convert(value)?)),
             },
