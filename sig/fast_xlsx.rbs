@@ -1,0 +1,22 @@
+module FastXlsx
+  VERSION: String
+
+  class Error < StandardError
+  end
+
+  type cell = Numeric | String | Time | bool | nil | _ToS
+
+  class Workbook
+    def self.new: (?constant_memory: bool) -> Workbook
+    def add_worksheet: (?String? name) -> Worksheet
+    def to_xlsx: () -> String
+    def save: (String path) -> void
+  end
+
+  class Worksheet
+    def write: (Integer row, Integer col, cell value) -> void
+    def <<: (Array[cell] row) -> self
+    def concat: (Array[Array[cell]] rows) -> self
+    def next_row: () -> Integer
+  end
+end

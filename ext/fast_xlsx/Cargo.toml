@@ -1,0 +1,18 @@
+[package]
+name = "fast_xlsx"
+version = "0.1.0"
+edition = "2021"
+authors = ["Zac <579103+7a6163@users.noreply.github.com>"]
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+magnus = "0.9"
+rb-sys = { version = "0.9", features = ["stable-api-compiled-fallback"] }
+rust_xlsxwriter = { version = "0.99.1", features = ["constant_memory", "zlib"] }
+
+[build-dependencies]
+rb-sys-env = "0.2.2"
