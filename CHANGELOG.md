@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-30
+
 ### Fixed
 
 - Values Excel cannot hold (a string over 32,767 characters, invalid UTF-8, a bad or over-long URL, more than 16,384 columns) raise before anything is written, instead of leaving the row half written.
