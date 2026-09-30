@@ -139,16 +139,17 @@ impl Workbook {
     fn set_properties(ruby: &Ruby, rb_self: &Self, fields: RHash) -> Result<(), Error> {
         let mut props = DocProperties::new();
         fields.foreach(|key: Symbol, value: String| {
+            let taken = std::mem::take(&mut props);
             props = match &*key.name()? {
-                "title" => props.clone().set_title(value),
-                "subject" => props.clone().set_subject(value),
-                "author" => props.clone().set_author(value),
-                "manager" => props.clone().set_manager(value),
-                "company" => props.clone().set_company(value),
-                "category" => props.clone().set_category(value),
-                "keywords" => props.clone().set_keywords(value),
-                "comments" => props.clone().set_comment(value),
-                "status" => props.clone().set_status(value),
+                "title" => taken.set_title(value),
+                "subject" => taken.set_subject(value),
+                "author" => taken.set_author(value),
+                "manager" => taken.set_manager(value),
+                "company" => taken.set_company(value),
+                "category" => taken.set_category(value),
+                "keywords" => taken.set_keywords(value),
+                "comments" => taken.set_comment(value),
+                "status" => taken.set_status(value),
                 other => {
                     return Err(Error::new(
                         ruby.exception_arg_error(),
@@ -476,6 +477,19 @@ fn check_header_footer(ruby: &Ruby, what: &str, text: &str) -> Result<(), Error>
     Ok(())
 }
 
+// Option `name` of a Ruby options Hash as given; nil when missing. For
+// choice(), which reports an invalid (or missing) value itself.
+fn raw_opt(ruby: &Ruby, options: RHash, name: &str) -> Value {
+    options
+        .get(ruby.to_symbol(name))
+        .unwrap_or_else(|| ruby.qnil().as_value())
+}
+
+// Option `name` of a Ruby options Hash, converted; missing or nil is None.
+fn opt<T: TryConvert>(ruby: &Ruby, options: RHash, name: &str) -> Result<Option<T>, Error> {
+    Option::<T>::try_convert(raw_opt(ruby, options, name))
+}
+
 // Rejects option keys outside `allowed`, so a typo raises instead of being ignored.
 fn check_keys(ruby: &Ruby, options: RHash, allowed: &[&str], what: &str) -> Result<(), Error> {
     options.foreach(|key: Symbol, _: Value| {
@@ -600,17 +614,15 @@ fn table_column(
         &["header", "total", "total_label", "format"],
         "table column",
     )?;
-    let nil = ruby.qnil().as_value();
-    let get = |name: &str| spec.get(ruby.to_symbol(name)).unwrap_or(nil);
-    let mut column = TableColumn::new().set_header(String::try_convert(get("header"))?);
-    if !get("total").is_nil() {
-        column =
-            column.set_total_function(choice(ruby, "table total", get("total"), TABLE_TOTALS)?);
+    let header = String::try_convert(raw_opt(ruby, spec, "header"))?;
+    let mut column = TableColumn::new().set_header(header);
+    if let Some(total) = opt::<Value>(ruby, spec, "total")? {
+        column = column.set_total_function(choice(ruby, "table total", total, TABLE_TOTALS)?);
     }
-    if !get("total_label").is_nil() {
-        column = column.set_total_label(String::try_convert(get("total_label"))?);
+    if let Some(label) = opt::<String>(ruby, spec, "total_label")? {
+        column = column.set_total_label(label);
     }
-    let format = Option::<&Format>::try_convert(get("format"))?.map(|f| f.0.clone());
+    let format = opt::<&Format>(ruby, spec, "format")?.map(|f| f.0.clone());
     if let Some(f) = &format {
         column = column.set_format(f);
     }
@@ -1012,20 +1024,19 @@ impl Worksheet {
         lc: u16,
         options: RHash,
     ) -> Result<Obj<Self>, Error> {
-        let nil = ruby.qnil().as_value();
-        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
         check_keys(
             ruby,
             options,
             &["type", "criteria", "value", "format", "colors"],
             "conditional_format",
         )?;
-        let format = Option::<&Format>::try_convert(opt("format"))?;
-        let value = opt("value");
+        let format = opt::<&Format>(ruby, options, "format")?;
+        let value = raw_opt(ruby, options, "value");
+        let criteria = raw_opt(ruby, options, "criteria");
         let kind = choice(
             ruby,
             "conditional format type",
-            opt("type"),
+            raw_opt(ruby, options, "type"),
             &[
                 ("cell", "cell"),
                 ("text", "text"),
@@ -1046,7 +1057,7 @@ impl Worksheet {
         let rule = match kind {
             "cell" => {
                 let mut cf =
-                    ConditionalFormatCell::new().set_rule(cell_rule(ruby, opt("criteria"), value)?);
+                    ConditionalFormatCell::new().set_rule(cell_rule(ruby, criteria, value)?);
                 if let Some(f) = format {
                     cf = cf.set_format(&f.0);
                 }
@@ -1057,7 +1068,7 @@ impl Worksheet {
                 let text_rule = match choice(
                     ruby,
                     "text criteria",
-                    opt("criteria"),
+                    criteria,
                     &[
                         ("contains", 0),
                         ("not_contains", 1),
@@ -1086,11 +1097,7 @@ impl Worksheet {
             }
             "data_bar" => Rule::DataBar,
             _ => {
-                let colors = if opt("colors").is_nil() {
-                    3
-                } else {
-                    u8::try_convert(opt("colors"))?
-                };
+                let colors = opt::<u8>(ruby, options, "colors")?.unwrap_or(3);
                 match colors {
                     2 => Rule::TwoColorScale,
                     3 => Rule::ThreeColorScale,
@@ -1134,8 +1141,6 @@ impl Worksheet {
         lc: u16,
         options: RHash,
     ) -> Result<Obj<Self>, Error> {
-        let nil = ruby.qnil().as_value();
-        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
         check_keys(
             ruby,
             options,
@@ -1150,12 +1155,13 @@ impl Worksheet {
             ],
             "data_validation",
         )?;
-        let (criteria, value) = (opt("criteria"), opt("value"));
+        let criteria = raw_opt(ruby, options, "criteria");
+        let value = raw_opt(ruby, options, "value");
         let dv = DataValidation::new();
         let mut dv = match choice(
             ruby,
             "data validation type",
-            opt("type"),
+            raw_opt(ruby, options, "type"),
             &[
                 ("list", "list"),
                 ("whole_number", "whole_number"),
@@ -1190,9 +1196,8 @@ impl Worksheet {
             ("error_title", DataValidation::set_error_title),
             ("error_message", DataValidation::set_error_message),
         ] {
-            let text = opt(name);
-            if !text.is_nil() {
-                dv = set(dv, String::try_convert(text)?).map_err(xerr)?;
+            if let Some(text) = opt::<String>(ruby, options, name)? {
+                dv = set(dv, text).map_err(xerr)?;
             }
         }
         rb_self.with_ws(|ws| {
@@ -1227,8 +1232,6 @@ impl Worksheet {
         bytes: RString,
         options: RHash,
     ) -> Result<Obj<Self>, Error> {
-        let nil = ruby.qnil().as_value();
-        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
         check_keys(
             ruby,
             options,
@@ -1237,33 +1240,17 @@ impl Worksheet {
             ],
             "insert_image",
         )?;
-        let offset = |name: &str| -> Result<u32, Error> {
-            let v = opt(name);
-            if v.is_nil() {
-                Ok(0)
-            } else {
-                u32::try_convert(v)
-            }
-        };
         // SAFETY: the bytes are copied into the Image before any Ruby code runs.
         let mut image = Image::new_from_buffer(unsafe { bytes.as_slice() }).map_err(xerr)?;
-        let pixels = |name: &str| -> Result<Option<f64>, Error> {
-            let v = opt(name);
-            if v.is_nil() {
-                Ok(None)
-            } else {
-                f64::try_convert(v).map(Some)
-            }
-        };
-        let (width, height) = (pixels("width")?, pixels("height")?);
-        if !opt("scale").is_nil() {
+        let width = opt::<f64>(ruby, options, "width")?;
+        let height = opt::<f64>(ruby, options, "height")?;
+        if let Some(scale) = opt::<f64>(ruby, options, "scale")? {
             if width.is_some() || height.is_some() {
                 return Err(Error::new(
                     ruby.exception_arg_error(),
                     "pass either scale: or width:/height:, not both",
                 ));
             }
-            let scale = f64::try_convert(opt("scale"))?;
             image = image.set_scale_width(scale).set_scale_height(scale);
         } else if width.is_some() || height.is_some() {
             // Displayed size at scale 1, as rust_xlsxwriter computes it from the DPI.
@@ -1275,10 +1262,11 @@ impl Worksheet {
             let (sw, sh) = (scale_w.or(scale_h).unwrap(), scale_h.or(scale_w).unwrap());
             image = image.set_scale_width(sw).set_scale_height(sh);
         }
-        if !opt("alt_text").is_nil() {
-            image = image.set_alt_text(String::try_convert(opt("alt_text"))?);
+        if let Some(alt_text) = opt::<String>(ruby, options, "alt_text")? {
+            image = image.set_alt_text(alt_text);
         }
-        let (x, y) = (offset("x_offset")?, offset("y_offset")?);
+        let x = opt::<u32>(ruby, options, "x_offset")?.unwrap_or(0);
+        let y = opt::<u32>(ruby, options, "y_offset")?.unwrap_or(0);
         rb_self.with_ws(|ws| {
             ws.insert_image_with_offset(row, col, &image, x, y)
                 .map(|_| ())
@@ -1294,16 +1282,7 @@ impl Worksheet {
         col: u16,
         options: RHash,
     ) -> Result<Obj<Self>, Error> {
-        let nil = ruby.qnil().as_value();
         let arg_error = |msg: String| Error::new(ruby.exception_arg_error(), msg);
-        let text = |v: Value| -> Result<Option<String>, Error> {
-            if v.is_nil() {
-                Ok(None)
-            } else {
-                String::try_convert(v).map(Some)
-            }
-        };
-        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
         check_keys(
             ruby,
             options,
@@ -1313,41 +1292,47 @@ impl Worksheet {
             "insert_chart",
         )?;
 
-        let mut chart = Chart::new(choice(ruby, "chart type", opt("type"), CHART_TYPES)?);
-        let series = RArray::try_convert(opt("series"))?;
+        let chart_type = choice(
+            ruby,
+            "chart type",
+            raw_opt(ruby, options, "type"),
+            CHART_TYPES,
+        )?;
+        let mut chart = Chart::new(chart_type);
+        let series = RArray::try_convert(raw_opt(ruby, options, "series"))?;
         if series.is_empty() {
             return Err(arg_error(
                 "series: needs at least one { values:, categories:, name: } hash".into(),
             ));
         }
-        for s in series.into_iter() {
+        each_entry(series, |_, s| {
             let s = RHash::try_convert(s)?;
             check_keys(ruby, s, &["values", "categories", "name"], "chart series")?;
-            let get = |name: &str| s.get(ruby.to_symbol(name)).unwrap_or(nil);
-            let values = text(get("values"))?
+            let values = opt::<String>(ruby, s, "values")?
                 .ok_or_else(|| arg_error(format!("series {} needs values:", s.inspect())))?;
             let cs = chart.add_series().set_values(values.as_str());
-            if let Some(categories) = text(get("categories"))? {
+            if let Some(categories) = opt::<String>(ruby, s, "categories")? {
                 cs.set_categories(categories.as_str());
             }
-            if let Some(name) = text(get("name"))? {
+            if let Some(name) = opt::<String>(ruby, s, "name")? {
                 cs.set_name(name.as_str());
             }
-        }
-        if let Some(title) = text(opt("title"))? {
+            Ok(())
+        })?;
+        if let Some(title) = opt::<String>(ruby, options, "title")? {
             chart.title().set_name(title.as_str());
         }
-        if let Some(name) = text(opt("x_axis"))? {
+        if let Some(name) = opt::<String>(ruby, options, "x_axis")? {
             chart.x_axis().set_name(name.as_str());
         }
-        if let Some(name) = text(opt("y_axis"))? {
+        if let Some(name) = opt::<String>(ruby, options, "y_axis")? {
             chart.y_axis().set_name(name.as_str());
         }
-        if !opt("width").is_nil() {
-            chart.set_width(u32::try_convert(opt("width"))?);
+        if let Some(width) = opt::<u32>(ruby, options, "width")? {
+            chart.set_width(width);
         }
-        if !opt("height").is_nil() {
-            chart.set_height(u32::try_convert(opt("height"))?);
+        if let Some(height) = opt::<u32>(ruby, options, "height")? {
+            chart.set_height(height);
         }
         rb_self.with_ws(|ws| ws.insert_chart(row, col, &chart).map(|_| ()).map_err(xerr))?;
         Ok(rb_self)
@@ -1376,26 +1361,19 @@ impl Worksheet {
             ],
             "add_table",
         )?;
-        let nil = ruby.qnil().as_value();
-        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
-        let flag = |name: &str, default: bool| {
-            let v = opt(name);
-            if v.is_nil() {
-                default
-            } else {
-                v.to_bool()
-            }
+        // Ruby truthiness, as before: any non-nil, non-false value enables.
+        let flag = |name: &str, default: bool| -> Result<bool, Error> {
+            Ok(opt::<Value>(ruby, options, name)?.map_or(default, |v| v.to_bool()))
         };
         // The table writes its header row, which must not be flushed yet.
         rb_self.check_not_flushed(ruby, fr)?;
-        let total_row = flag("total_row", false);
+        let total_row = flag("total_row", false)?;
         let mut table = Table::new()
             .set_total_row(total_row)
-            .set_banded_rows(flag("banded_rows", true))
-            .set_autofilter(flag("autofilter", true));
+            .set_banded_rows(flag("banded_rows", true)?)
+            .set_autofilter(flag("autofilter", true)?);
         let mut column_formats = Vec::new();
-        if !opt("columns").is_nil() {
-            let specs = RArray::try_convert(opt("columns"))?;
+        if let Some(specs) = opt::<RArray>(ruby, options, "columns")? {
             let width = usize::from(lc.saturating_sub(fc)) + 1;
             if specs.len() != width {
                 return Err(Error::new(
@@ -1417,11 +1395,11 @@ impl Worksheet {
             })?;
             table = table.set_columns(&columns);
         }
-        if !opt("style").is_nil() {
-            table = table.set_style(choice(ruby, "table style", opt("style"), TABLE_STYLES)?);
+        if let Some(style) = opt::<Value>(ruby, options, "style")? {
+            table = table.set_style(choice(ruby, "table style", style, TABLE_STYLES)?);
         }
-        if !opt("name").is_nil() {
-            table = table.set_name(String::try_convert(opt("name"))?);
+        if let Some(name) = opt::<String>(ruby, options, "name")? {
+            table = table.set_name(name);
         }
         rb_self.with_ws(|ws| {
             ws.add_table(fr, fc, lr, lc, &table)
