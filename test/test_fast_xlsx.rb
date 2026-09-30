@@ -300,6 +300,45 @@ class TestFastXlsx < Minitest::Test
     assert_equal %w[Sheet1 Summary], wb.worksheets.map(&:name)
   end
 
+  def test_strikeout_and_font_script
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "x", FastXlsx::Format.new(strikeout: true, font_script: :superscript))
+    ws.write(0, 1, "y", FastXlsx::Format.new(font_script: :subscript))
+
+    assert_equal [true, "superscript"], cell_style(wb, "A1").values_at(:strikeout, :script)
+    assert_equal [false, "subscript"], cell_style(wb, "B1").values_at(:strikeout, :script)
+  end
+
+  def test_underline_styles
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "a", FastXlsx::Format.new(underline: :double))
+    ws.write(0, 1, "b", FastXlsx::Format.new(underline: :single_accounting))
+    ws.write(0, 2, "c", FastXlsx::Format.new(underline: true))
+
+    assert_equal(%w[double singleAccounting single], %w[A1 B1 C1].map { |ref| cell_style(wb, ref)[:underline] })
+  end
+
+  def test_rotation_indent_and_shrink
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(rotation: 45, indent: 2, shrink: true))
+
+    assert_equal [45, 2, true], cell_style(wb, "A1").values_at(:rotation, :indent, :shrink)
+  end
+
+  def test_rotation_out_of_range_raises
+    error = assert_raises(ArgumentError) { FastXlsx::Format.new(rotation: 120) }
+    assert_includes error.message, "120"
+  end
+
+  def test_border_color
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(border: :thin, border_color: "#FF0000"))
+
+    assert_equal %w[FFFF0000] * 4, cell_style(wb, "A1")[:border_color].values
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

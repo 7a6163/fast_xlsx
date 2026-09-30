@@ -29,11 +29,15 @@ module FastXlsx
     type color = String | Integer
     type border = :thin | :medium | :thick | :dashed | :dotted | :double | :hair
 
-    def self.new: (?bold: bool, ?italic: bool, ?underline: bool, ?text_wrap: bool, ?num_format: String,
-                   ?font_size: Numeric, ?font_name: String, ?font_color: color, ?bg_color: color,
+    type underline = bool | :single | :double | :single_accounting | :double_accounting
+
+    def self.new: (?bold: bool, ?italic: bool, ?underline: underline, ?strikeout: bool, ?text_wrap: bool,
+                   ?shrink: bool, ?num_format: String, ?font_size: Numeric, ?font_name: String,
+                   ?font_color: color, ?bg_color: color, ?font_script: :superscript | :subscript,
                    ?align: :left | :center | :right, ?valign: :top | :center | :bottom,
+                   ?rotation: Integer, ?indent: Integer,
                    ?border: border, ?border_left: border, ?border_right: border,
-                   ?border_top: border, ?border_bottom: border) -> Format
+                   ?border_top: border, ?border_bottom: border, ?border_color: color) -> Format
   end
 
   class Worksheet

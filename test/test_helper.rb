@@ -58,8 +58,18 @@ module XlsxHelpers
     {
       font_size: font.at("sz")&.[]("val")&.to_f, font_name: font.at("name")&.[]("val"),
       font_color: font.at("color")&.[]("rgb"), bg_color: fill.at("fgColor")&.[]("rgb"),
+      strikeout: !font.at("strike").nil?, script: font.at("vertAlign")&.[]("val"), underline: underline(font),
       align: align&.[]("horizontal"), valign: align&.[]("vertical"), text_wrap: align&.[]("wrapText") == "1",
-      border: %w[left right top bottom].to_h { |side| [side.to_sym, border.at(side)&.[]("style")] }
+      rotation: align&.[]("textRotation")&.to_i, indent: align&.[]("indent")&.to_i,
+      shrink: align&.[]("shrinkToFit") == "1",
+      border: %w[left right top bottom].to_h { |side| [side.to_sym, border.at(side)&.[]("style")] },
+      border_color: %w[left right top bottom].to_h { |side| [side.to_sym, border.at("#{side} > color")&.[]("rgb")] }
     }
+  end
+
+  # <u/> is a single underline; other styles carry val="double" etc.
+  def underline(font)
+    u = font.at("u")
+    u && (u["val"] || "single")
   end
 end

@@ -34,7 +34,11 @@ ws.write(1, 2, Date.today, date)                         # format one cell
 
 | Option | Values |
 |---|---|
-| `bold`, `italic`, `underline`, `text_wrap` | `true` / `false` |
+| `bold`, `italic`, `strikeout`, `text_wrap`, `shrink` | `true` / `false` |
+| `underline` | `true` (single), `:single`, `:double`, `:single_accounting`, `:double_accounting` |
+| `font_script` | `:superscript`, `:subscript` |
+| `rotation` | degrees, `-90..90`, or `270` for stacked text |
+| `indent` | indent level, e.g. `2` |
 | `font_size` | number, e.g. `14` |
 | `font_name` | e.g. `"Arial"` |
 | `font_color`, `bg_color` | `"#RRGGBB"` or `0xRRGGBB` |
@@ -42,6 +46,7 @@ ws.write(1, 2, Date.today, date)                         # format one cell
 | `align` | `:left`, `:center`, `:right` |
 | `valign` | `:top`, `:center`, `:bottom` |
 | `border`, `border_left`, `border_right`, `border_top`, `border_bottom` | `:thin`, `:medium`, `:thick`, `:dashed`, `:dotted`, `:double`, `:hair` |
+| `border_color` | `"#RRGGBB"` or `0xRRGGBB` |
 
 Per-side borders override `border`. Unknown options and invalid values raise `ArgumentError`.
 

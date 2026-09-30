@@ -7,7 +7,7 @@ use magnus::{
     Value,
 };
 use rust_xlsxwriter::{
-    Color, FormatAlign, FormatBorder, FormatUnderline, IntoExcelData, XlsxError,
+    Color, FormatAlign, FormatBorder, FormatScript, FormatUnderline, IntoExcelData, XlsxError,
 };
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
@@ -220,7 +220,43 @@ impl Format {
             f = match &*key.name()? {
                 "bold" if value.to_bool() => taken.set_bold(),
                 "italic" if value.to_bool() => taken.set_italic(),
-                "underline" if value.to_bool() => taken.set_underline(FormatUnderline::Single),
+                "underline" if value.is_kind_of(ruby.class_true_class()) => {
+                    taken.set_underline(FormatUnderline::Single)
+                }
+                "underline" if value.to_bool() => taken.set_underline(choice(
+                    ruby,
+                    "underline",
+                    value,
+                    &[
+                        ("single", FormatUnderline::Single),
+                        ("double", FormatUnderline::Double),
+                        ("single_accounting", FormatUnderline::SingleAccounting),
+                        ("double_accounting", FormatUnderline::DoubleAccounting),
+                    ],
+                )?),
+                "strikeout" if value.to_bool() => taken.set_font_strikethrough(),
+                "font_script" => taken.set_font_script(choice(
+                    ruby,
+                    "font_script",
+                    value,
+                    &[
+                        ("superscript", FormatScript::Superscript),
+                        ("subscript", FormatScript::Subscript),
+                    ],
+                )?),
+                "rotation" => {
+                    let degrees = i16::try_convert(value)?;
+                    if !(-90..=90).contains(&degrees) && degrees != 270 {
+                        return Err(Error::new(
+                            ruby.exception_arg_error(),
+                            format!("invalid rotation {degrees}: use -90..90 or 270"),
+                        ));
+                    }
+                    taken.set_rotation(degrees)
+                }
+                "indent" => taken.set_indent(u8::try_convert(value)?),
+                "shrink" if value.to_bool() => taken.set_shrink(),
+                "border_color" => taken.set_border_color(color(ruby, value)?),
                 "num_format" => taken.set_num_format(String::try_convert(value)?),
                 "font_size" => taken.set_font_size(f64::try_convert(value)?),
                 "font_name" => taken.set_font_name(String::try_convert(value)?),
@@ -252,7 +288,7 @@ impl Format {
                 "border_right" => taken.set_border_right(choice(ruby, "border", value, BORDERS)?),
                 "border_top" => taken.set_border_top(choice(ruby, "border", value, BORDERS)?),
                 "border_bottom" => taken.set_border_bottom(choice(ruby, "border", value, BORDERS)?),
-                "bold" | "italic" | "underline" | "text_wrap" => taken,
+                "bold" | "italic" | "underline" | "text_wrap" | "strikeout" | "shrink" => taken,
                 other => {
                     return Err(Error::new(
                         ruby.exception_arg_error(),
