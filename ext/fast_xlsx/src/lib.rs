@@ -3,17 +3,20 @@ use std::sync::{Arc, Mutex};
 
 use magnus::{
     function, method, prelude::*, typed_data::Obj, value::Lazy, Error, ExceptionClass, RArray,
-    RModule, RString, Ruby, Value,
+    RClass, RModule, RString, Ruby, TryConvert, Value,
 };
 use rust_xlsxwriter::XlsxError;
 
-// FastXlsx::Error is defined in lib/fast_xlsx.rb before this extension loads.
-static ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| {
+// These constants are defined in lib/fast_xlsx.rb before this extension loads.
+fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
     ruby.class_object()
         .const_get::<_, RModule>("FastXlsx")
-        .and_then(|m| m.const_get("Error"))
+        .and_then(|m| m.const_get(name))
         .unwrap()
-});
+}
+
+static ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Error"));
+static FORMULA: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Formula"));
 
 fn xerr(e: XlsxError) -> Error {
     let ruby = Ruby::get().unwrap();
@@ -103,6 +106,9 @@ fn put(
         ws.write_number(row, col, excel_time(v)?)
     } else if v.is_kind_of(ruby.class_true_class()) || v.is_kind_of(ruby.class_false_class()) {
         ws.write_boolean(row, col, v.to_bool())
+    } else if v.is_kind_of(ruby.get_inner(&FORMULA)) {
+        let expression: String = v.funcall("expression", ())?;
+        ws.write_formula(row, col, expression.as_str())
     } else if v.respond_to("jd", false)? {
         ws.write_number(row, col, excel_date(v)?)
     } else {

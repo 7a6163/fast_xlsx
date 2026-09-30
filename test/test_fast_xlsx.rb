@@ -62,6 +62,13 @@ class TestFastXlsx < Minitest::Test
     assert_equal [[36_526.75]], rows(wb)
   end
 
+  def test_formula_is_written_as_formula
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [1, 2, FastXlsx::Formula.new("SUM(A1:B1)")]
+
+    assert_equal "SUM(A1:B1)", open_xlsx(wb).formula(1, 3)
+  end
+
   def test_append_continues_after_last_written_row
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

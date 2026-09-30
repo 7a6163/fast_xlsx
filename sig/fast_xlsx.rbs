@@ -4,7 +4,12 @@ module FastXlsx
   class Error < StandardError
   end
 
-  type cell = Numeric | String | Time | Date | bool | nil | _ToS
+  type cell = Numeric | String | Time | Date | Formula | bool | nil | _ToS
+
+  class Formula
+    attr_reader expression: String
+    def self.new: (_ToS expression) -> Formula
+  end
 
   class Workbook
     def self.new: (?constant_memory: bool) -> Workbook

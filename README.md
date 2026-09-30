@@ -2,7 +2,7 @@
 
 Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
-> **Status: early.** Values only — formats, formulas, URLs, column widths and charts are not implemented yet.
+> **Status: early.** Formats, URLs, column widths and charts are not implemented yet.
 
 ## Usage
 
@@ -27,6 +27,7 @@ Values are mapped by type:
 | `String` | string |
 | `Time` | number (Excel serial date, local time) |
 | `Date`, `DateTime` | number (Excel serial date, own offset) |
+| `FastXlsx::Formula.new("SUM(A1:A9)")` | formula |
 | `true` / `false` | boolean |
 | `nil` | empty cell |
 | anything else | `to_s` as string |

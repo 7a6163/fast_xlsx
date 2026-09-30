@@ -6,6 +6,13 @@ require_relative "fast_xlsx/version"
 module FastXlsx
   class Error < StandardError; end
 
+  # Cell value written as an Excel formula, e.g. Formula.new("SUM(A1:A9)").
+  Formula = Data.define(:expression) do
+    def initialize(expression:)
+      super(expression: expression.to_s)
+    end
+  end
+
   # The native extension looks up FastXlsx::Error, so load it after Error is defined.
   require "fast_xlsx/fast_xlsx"
 
