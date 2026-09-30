@@ -58,7 +58,17 @@ module FastXlsx
 
     # columns: a 0-based column index or a Range of them. width is in characters.
     def set_column_width(columns, width)
-      _set_column_width(*column_bounds(columns), width)
+      bounds = column_bounds(columns)
+      _set_column_width(*bounds, width)
+      (@fixed_widths ||= {})[bounds] = width
+      self
+    end
+
+    # Sizes columns to the data written so far. Widths set with
+    # set_column_width are kept.
+    def autofit
+      _autofit
+      @fixed_widths&.each { |bounds, width| _set_column_width(*bounds, width) }
       self
     end
 

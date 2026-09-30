@@ -149,6 +149,20 @@ class TestFastXlsx < Minitest::Test
     assert_operator widths[2], :<, widths[1]
   end
 
+  def test_autofit_keeps_widths_set_explicitly
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws << ["x" * 80, "y" * 80, "z" * 80]
+    ws.set_column_width(0, 12)
+    ws.set_column_width(2..2, 20)
+    ws.autofit
+
+    widths = column_widths(wb)
+    assert_in_delta 12, widths[1], 1
+    assert_operator widths[2], :>, 60
+    assert_in_delta 20, widths[3], 1
+  end
+
   def test_autofilter_covers_the_given_range
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

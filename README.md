@@ -56,7 +56,7 @@ Per-side borders override `border`. Unknown options and invalid values raise `Ar
 ws.set_column_width(0, 20)        # column A, width in characters
 ws.set_column_width(1..3, 12)     # columns B–D
 ws.set_column_format(4, FastXlsx::Format.new(num_format: "#,##0.00")) # default for cells in E written without a format
-ws.autofit                        # size columns to the data written so far
+ws.autofit                        # size other columns to the data written so far; set widths are kept
 ws.autofilter(0, 0, 100, 3)       # filter buttons on A1:D101 (first_row, first_col, last_row, last_col)
 ```
 

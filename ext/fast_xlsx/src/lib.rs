@@ -892,7 +892,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "_set_column_format",
         method!(Worksheet::set_column_format, 3),
     )?;
-    ws.define_method("autofit", method!(Worksheet::autofit, 0))?;
+    ws.define_method("_autofit", method!(Worksheet::autofit, 0))?;
     ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
     ws.define_method("name", method!(Worksheet::name, 0))?;
     ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
