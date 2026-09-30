@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-30
+
+### Fixed
+
+- Precompiled (platform) gems failed to `require`: the extension was only looked up where a source install puts it, not in the per-Ruby-version directory that platform gems use. 0.1.0 is yanked; upgrade to 0.1.1.
+
+### Changed
+
+- Releases now install and load the built platform gems on Linux, macOS and Windows with Ruby 3.3, 3.4 and 4.0 before publishing.
+
 ## [0.1.0] - 2026-09-30
 
 First release: a fast `.xlsx` writer built on rust_xlsxwriter. Early API; it may still change before 1.0.
