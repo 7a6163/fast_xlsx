@@ -144,15 +144,15 @@ jobs:
       # GitHub Packages goes first, with only its own token. gem push prefers
       # GEM_HOST_API_KEY over --key, so once the RubyGems credentials below are
       # configured they would be sent to whichever host is pushed to.
+      # GitHub Packages keeps one gem per version (it rejects a second platform
+      # gem as "already pushed"), so only the source gem goes there; installing
+      # from it compiles the extension and needs a Rust toolchain.
       - name: Push to GitHub Packages
         # A GitHub Packages problem must not stop the RubyGems release below.
         continue-on-error: true
         env:
           GEM_HOST_API_KEY: Bearer ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for gem in pkg/*.gem; do
-            gem push --host "https://rubygems.pkg.github.com/${GITHUB_REPOSITORY_OWNER}" "$gem"
-          done
+        run: gem push --host "https://rubygems.pkg.github.com/${GITHUB_REPOSITORY_OWNER}" "pkg/fast_xlsx-${GITHUB_REF_NAME#v}.gem"
 
       - uses: rubygems/configure-rubygems-credentials@v2.1.0
 
