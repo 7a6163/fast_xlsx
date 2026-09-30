@@ -882,7 +882,8 @@ class TestFastXlsx < Minitest::Test
     Dir.mktmpdir do |dir|
       path = File.join(dir, "showcase.xlsx")
       example = File.expand_path("../examples/showcase.rb", __dir__)
-      assert system(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), example, path), "showcase.rb failed"
+      assert system(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), example, path, out: File::NULL),
+             "showcase.rb failed"
 
       assert_equal %w[Values Formats Layout Conditional Validation Table Chart Media Printing],
                    Roo::Excelx.new(path).sheets

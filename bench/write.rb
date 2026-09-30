@@ -30,7 +30,7 @@ rescue LoadError
 end
 
 [false, true].each do |cm|
-  puts "constant_memory=#{cm}, #{ROWS}x5 cells, median of 7"
+  puts "memory=#{cm ? "constant" : "standard"}, #{ROWS}x5 cells, median of 7"
   report("fast_xlsx <<") do
     wb = FastXlsx::Workbook.new(memory: cm ? :constant : :standard)
     ws = wb.add_worksheet
