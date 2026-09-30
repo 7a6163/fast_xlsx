@@ -2,7 +2,7 @@ PATH
   remote: ..
   specs:
     fast_xlsx (0.1.0)
-      rb_sys (~> 0.9.91)
+      rb_sys (~> 0.9.130)
 
 GEM
   remote: https://rubygems.org/

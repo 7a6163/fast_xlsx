@@ -625,6 +625,23 @@ impl Format {
     }
 }
 
+// Visits each element by index. RArray::into_iter dups the array first, and
+// dup'ing an Array longer than 3 elements turns the caller's array into a
+// shared root: one extra live Ruby object per row for as long as the data lives.
+// Reading the length each step also stays correct if Ruby code run by `f`
+// (e.g. a to_s) changes the array.
+fn each_entry(
+    ary: RArray,
+    mut f: impl FnMut(usize, Value) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let mut i = 0;
+    while i < ary.len() {
+        f(i, ary.entry(i as isize)?)?;
+        i += 1;
+    }
+    Ok(())
+}
+
 // A row's format: one Format (or nil) for every cell, or an Array with one per cell.
 enum RowFormat {
     Same(Option<&'static Format>),
@@ -681,12 +698,11 @@ impl Worksheet {
         format: &RowFormat,
     ) -> Result<(), Error> {
         self.with_ws(|ws| {
-            for (i, v) in cells.into_iter().enumerate() {
+            each_entry(cells, |i, v| {
                 let col = u16::try_from(i)
                     .map_err(|_| Error::new(ruby.exception_arg_error(), "too many columns"))?;
-                put(ruby, ws, row, col, v, format.at(i)?)?;
-            }
-            Ok(())
+                put(ruby, ws, row, col, v, format.at(i)?)
+            })
         })?;
         self.advance(row);
         Ok(())
@@ -723,10 +739,10 @@ impl Worksheet {
     }
 
     fn concat(ruby: &Ruby, rb_self: Obj<Self>, rows: RArray) -> Result<Obj<Self>, Error> {
-        for r in rows.into_iter() {
+        each_entry(rows, |_, r| {
             let cells = RArray::try_convert(r)?;
-            rb_self.write_row(ruby, rb_self.next_row.get(), cells, &RowFormat::Same(None))?;
-        }
+            rb_self.write_row(ruby, rb_self.next_row.get(), cells, &RowFormat::Same(None))
+        })?;
         Ok(rb_self)
     }
 

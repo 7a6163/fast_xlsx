@@ -757,6 +757,24 @@ class TestFastXlsx < Minitest::Test
     assert_equal [[2]], rows(wb, "two")
   end
 
+  # Iterating a row must not dup it: dup'ing an Array longer than 3 elements
+  # turns the caller's array into a shared root, one extra live object per row.
+  def test_writing_rows_does_not_retain_ruby_objects
+    rows = Array.new(10_000) { |i| [i, "s", i * 2, i * 3, i * 4] }
+    {
+      "<<" => ->(ws) { rows.each { |r| ws << r } },
+      "concat" => ->(ws) { ws.concat(rows) }
+    }.each do |name, write|
+      ws = FastXlsx::Workbook.new(constant_memory: true).add_worksheet
+      GC.start
+      before = GC.stat(:heap_live_slots)
+      write.call(ws)
+      GC.start
+
+      assert_operator GC.stat(:heap_live_slots) - before, :<, 1_000, name
+    end
+  end
+
   def test_constant_memory_writes_all_rows
     wb = FastXlsx::Workbook.new(constant_memory: true)
     wb.add_worksheet.concat(Array.new(1000) { |i| [i, "row #{i}"] })
