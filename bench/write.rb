@@ -32,13 +32,13 @@ end
 [false, true].each do |cm|
   puts "constant_memory=#{cm}, #{ROWS}x5 cells, median of 7"
   report("fast_xlsx <<") do
-    wb = FastXlsx::Workbook.new(constant_memory: cm)
+    wb = FastXlsx::Workbook.new(memory: cm ? :constant : :standard)
     ws = wb.add_worksheet
     DATA.each { |r| ws << r }
     wb.to_xlsx
   end
   report("fast_xlsx concat") do
-    wb = FastXlsx::Workbook.new(constant_memory: cm)
+    wb = FastXlsx::Workbook.new(memory: cm ? :constant : :standard)
     wb.add_worksheet.concat(DATA)
     wb.to_xlsx
   end

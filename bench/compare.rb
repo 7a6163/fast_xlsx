@@ -33,13 +33,13 @@ WRITERS = {
     wb.add_worksheet.concat(DATA)
     wb.to_xlsx
   },
-  "fast_xlsx (constant_memory)" => lambda {
-    wb = FastXlsx::Workbook.new(constant_memory: true)
+  "fast_xlsx (memory: :constant)" => lambda {
+    wb = FastXlsx::Workbook.new(memory: :constant)
     wb.add_worksheet.concat(DATA)
     wb.to_xlsx
   },
-  "fast_xlsx (low_memory)" => lambda {
-    wb = FastXlsx::Workbook.new(low_memory: true)
+  "fast_xlsx (memory: :low)" => lambda {
+    wb = FastXlsx::Workbook.new(memory: :low)
     wb.add_worksheet.concat(DATA)
     wb.to_xlsx
   },

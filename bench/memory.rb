@@ -28,7 +28,7 @@ when "baseline"
   nil
 when /\Afast_xlsx/
   mode = writer.split(":")[1]
-  wb = FastXlsx::Workbook.new(constant_memory: mode == "constant", low_memory: mode == "low")
+  wb = FastXlsx::Workbook.new(memory: (mode || "standard").to_sym)
   wb.add_worksheet.concat(data)
   wb.save(out)
 when /\Afast_excel/

@@ -1,32 +1,32 @@
 ## [Unreleased]
 
-- `Workbook` / `Worksheet` with `<<`, `concat`, `write`, `to_xlsx`, `save`
-- `constant_memory` mode
-- Numeric, String, Time, Date/DateTime, boolean and nil cell values
-- `FastXlsx::Formula` cell values
-- `FastXlsx::URL` hyperlink cell values
-- `FastXlsx::Format` (bold, italic, underline, num_format) for `Worksheet#write` and `Worksheet#append`
-- Raise `FastXlsx::Error` instead of silently dropping writes to already-flushed rows in `constant_memory` mode
-- `Worksheet#set_column_width`, `#autofit` and `#autofilter`
-- Format options `font_size`, `font_name`, `font_color`, `bg_color`, `align`, `valign`, `text_wrap` and borders
-- `Worksheet#append(values, format: [...])` takes one format per cell
-- `Worksheet#set_column_format` for column default formats
-- `Worksheet#freeze_panes`, `#set_row_height` and `#merge_range`
-- `Workbook#worksheet(name)`, `Workbook#worksheets` and `Worksheet#name`
-- Format options `strikeout`, `font_script`, `rotation`, `indent`, `shrink`, `border_color` and underline styles
-- `Worksheet#conditional_format` (cell, text, formula, data bar and color scale rules)
-- `Worksheet#data_validation` (dropdown lists, whole number, decimal and text length rules, input/error messages)
-- `Worksheet#write_comment` (Excel notes, optional author)
-- `Worksheet#insert_image` from a path or IO, with scale, offsets and alt text
-- `Worksheet#insert_chart` (column, bar, line, area, stacked variants, pie, doughnut, radar, scatter) with titles, axis names and size
-- `autofit` keeps widths set with `set_column_width` (fast_excel #85)
-- `URL.new(url, text:)` shows other text in the cell (fast_excel #69)
-- `insert_image(..., width:, height:)` in pixels (fast_excel #9)
-- `Worksheet#set_page_breaks` and `#set_vertical_page_breaks` (fast_excel #109)
-- `Workbook#set_properties` for document properties (fast_excel #30)
-- `Worksheet#set_header`, `#set_footer` and `#set_margins` (fast_excel #56)
-- Unknown options to `conditional_format`, `data_validation`, `insert_image`, `insert_chart` and chart series raise `ArgumentError`
-- `Worksheet#add_table` (Excel tables with styles, total row and column totals; fast_excel #102)
-- `FastXlsx::RichString` cell values with a format per text segment (fast_excel #67)
-- Fix one retained Ruby object per written row (rows longer than 3 cells), which made memory grow with row count in constant_memory mode
-- `Workbook.new(low_memory: true)`: rows written to disk like `constant_memory`, but strings kept in the standard shared string table
+First release: a fast `.xlsx` writer built on rust_xlsxwriter. Early API; it may still change before 1.0.
+
+### Workbooks and worksheets
+
+- `FastXlsx::Workbook.new(memory: :standard | :constant | :low)`: keep every cell in memory, or write finished rows to disk with strings inline (`:constant`) or in the shared string table (`:low`)
+- `Workbook#add_worksheet`, `#worksheet(name)`, `#worksheets`, `#properties` (document properties), `#to_xlsx`, `#save`
+- `Worksheet#<<`, `#append`, `#concat`, `#write` (all return the worksheet); writes to rows already on disk raise `FastXlsx::Error`
+- Rows and columns are 0-based
+
+### Cell values
+
+- Numeric, String, Time, Date/DateTime, boolean and nil
+- `FastXlsx::Formula`, `FastXlsx::URL` (optionally showing other text), `FastXlsx::RichString` (a format per text segment)
+
+### Formatting
+
+- `FastXlsx::Format`: fonts, colors, number formats, alignment, wrapping, rotation, indent, borders and underline styles; unknown options and invalid values raise `ArgumentError`
+- One format per row or per cell in `append`; `Worksheet#column_format` for column defaults
+
+### Layout and features
+
+- `column_width`, `autofit` (keeps widths set explicitly), `row_height`, `freeze_panes`, `merge_range`, `autofilter`
+- `conditional_format` (cell, text, formula, data bar, color scale), `data_validation` (lists, numbers, text length, messages)
+- `add_table` (styles, total row, column totals), `insert_chart`, `insert_image` (path or IO, scale or pixel size), `write_comment`
+- Printing: `page_header`, `page_footer`, `margins`, `page_breaks`, `vertical_page_breaks`
+- Unknown options to the option-hash methods raise `ArgumentError`
+
+### Packaging
+
+- Precompiled gems for Linux (glibc and musl, x86_64 and aarch64, arm), macOS (arm64 and x86_64) and Windows (x64); requires CRuby 3.3+

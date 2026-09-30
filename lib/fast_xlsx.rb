@@ -49,14 +49,19 @@ module FastXlsx
 
   # Owns the worksheets; serialize with #to_xlsx or #save.
   class Workbook
-    # constant_memory: / low_memory: write each finished row to disk, so each
-    # worksheet must be filled top to bottom. constant_memory stores strings
-    # inline (memory stays flat); low_memory keeps Excel's shared string table
-    # (memory grows with the number of unique strings, output is standard).
-    def self.new(constant_memory: false, low_memory: false)
-      raise ArgumentError, "use constant_memory: or low_memory:, not both" if constant_memory && low_memory
+    MEMORY_MODES = %i[standard constant low].freeze
 
-      _new(constant_memory, low_memory)
+    # memory: :standard keeps every cell in memory until saving. :constant and
+    # :low write each finished row to disk, so each worksheet must be filled
+    # top to bottom. :constant stores strings inline (memory stays flat); :low
+    # keeps Excel's shared string table (memory grows with the number of
+    # unique strings, output is standard).
+    def self.new(memory: :standard)
+      unless MEMORY_MODES.include?(memory)
+        raise ArgumentError, "unknown memory mode #{memory.inspect} (expected one of #{MEMORY_MODES.join(", ")})"
+      end
+
+      _new(memory == :constant, memory == :low)
     end
 
     def add_worksheet(name = nil)
@@ -76,9 +81,9 @@ module FastXlsx
     # Document properties shown in Excel's File > Info: title:, subject:,
     # author:, manager:, company:, category:, keywords:, comments:, status:.
     # Later calls add to earlier ones.
-    def set_properties(**fields)
+    def properties(**fields)
       merged = (@properties || {}).merge(fields)
-      _set_properties(merged) # validates before anything is remembered
+      _properties(merged) # validates before anything is remembered
       @properties = merged
       self
     end
@@ -88,6 +93,7 @@ module FastXlsx
   class Worksheet
     def write(row, col, value, format = nil)
       _write(row, col, value, format)
+      self
     end
 
     def append(values, format: nil)
@@ -95,9 +101,9 @@ module FastXlsx
     end
 
     # columns: a 0-based column index or a Range of them. width is in characters.
-    def set_column_width(columns, width)
+    def column_width(columns, width)
       bounds = column_bounds(columns)
-      _set_column_width(*bounds, width)
+      _column_width(*bounds, width)
       @fixed_widths ||= {}
       @fixed_widths.delete(bounds) # re-insert so autofit replays calls in order
       @fixed_widths[bounds] = width
@@ -105,10 +111,10 @@ module FastXlsx
     end
 
     # Sizes columns to the data written so far. Widths set with
-    # set_column_width are kept.
+    # column_width are kept.
     def autofit
       _autofit
-      @fixed_widths&.each { |bounds, width| _set_column_width(*bounds, width) }
+      @fixed_widths&.each { |bounds, width| _column_width(*bounds, width) }
       self
     end
 
@@ -159,25 +165,25 @@ module FastXlsx
 
     # Printed page header/footer using Excel codes such as "&CPage &P of &N".
     # margin: is in inches.
-    def set_header(text, margin: nil)
-      _set_header(text)
-      margin ? set_margins(header: margin) : self
+    def page_header(text, margin: nil)
+      _page_header(text)
+      margin ? margins(header: margin) : self
     end
 
-    def set_footer(text, margin: nil)
-      _set_footer(text)
-      margin ? set_margins(footer: margin) : self
+    def page_footer(text, margin: nil)
+      _page_footer(text)
+      margin ? margins(footer: margin) : self
     end
 
     # Print margins in inches; margins not given keep their current value.
-    def set_margins(left: nil, right: nil, top: nil, bottom: nil, header: nil, footer: nil)
-      _set_margins(*[left, right, top, bottom, header, footer].map { |m| m || -1.0 })
+    def margins(left: nil, right: nil, top: nil, bottom: nil, header: nil, footer: nil)
+      _margins(*[left, right, top, bottom, header, footer].map { |m| m || -1.0 })
       self
     end
 
     # Default format for cells in these columns that are written without one.
-    def set_column_format(columns, format)
-      _set_column_format(*column_bounds(columns), format)
+    def column_format(columns, format)
+      _column_format(*column_bounds(columns), format)
       self
     end
 

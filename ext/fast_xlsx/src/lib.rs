@@ -1296,14 +1296,14 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     wb.define_method("_add_worksheet", method!(Workbook::add_worksheet, 1))?;
     wb.define_method("to_xlsx", method!(Workbook::to_xlsx, 0))?;
     wb.define_method("save", method!(Workbook::save, 1))?;
-    wb.define_method("_set_properties", method!(Workbook::set_properties, 1))?;
+    wb.define_method("_properties", method!(Workbook::set_properties, 1))?;
 
     let ws = module.define_class("Worksheet", ruby.class_object())?;
     ws.define_method("_write", method!(Worksheet::write, 4))?;
     ws.define_method("_append", method!(Worksheet::append, 2))?;
-    ws.define_method("_set_column_width", method!(Worksheet::set_column_width, 3))?;
+    ws.define_method("_column_width", method!(Worksheet::set_column_width, 3))?;
     ws.define_method(
-        "_set_column_format",
+        "_column_format",
         method!(Worksheet::set_column_format, 3),
     )?;
     ws.define_method("_autofit", method!(Worksheet::autofit, 0))?;
@@ -1319,13 +1319,13 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     ws.define_method("_data_validation", method!(Worksheet::data_validation, 5))?;
     ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
-    ws.define_method("set_row_height", method!(Worksheet::set_row_height, 2))?;
-    ws.define_method("set_page_breaks", method!(Worksheet::set_page_breaks, 1))?;
-    ws.define_method("_set_header", method!(Worksheet::set_header, 1))?;
-    ws.define_method("_set_footer", method!(Worksheet::set_footer, 1))?;
-    ws.define_method("_set_margins", method!(Worksheet::set_margins, 6))?;
+    ws.define_method("row_height", method!(Worksheet::set_row_height, 2))?;
+    ws.define_method("page_breaks", method!(Worksheet::set_page_breaks, 1))?;
+    ws.define_method("_page_header", method!(Worksheet::set_header, 1))?;
+    ws.define_method("_page_footer", method!(Worksheet::set_footer, 1))?;
+    ws.define_method("_margins", method!(Worksheet::set_margins, 6))?;
     ws.define_method(
-        "set_vertical_page_breaks",
+        "vertical_page_breaks",
         method!(Worksheet::set_vertical_page_breaks, 1),
     )?;
     ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;

@@ -133,11 +133,11 @@ class TestFastXlsx < Minitest::Test
     refute_predicate xlsx.font(2, 1), :bold?
   end
 
-  def test_set_column_width_for_single_column_and_range
+  def test_column_width_for_single_column_and_range
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    ws.set_column_width(0, 20)
-    ws.set_column_width(2..3, 5)
+    ws.column_width(0, 20)
+    ws.column_width(2..3, 5)
     ws << %w[a b c d]
 
     widths = column_widths(wb)
@@ -162,8 +162,8 @@ class TestFastXlsx < Minitest::Test
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
     ws << ["x" * 80, "y" * 80, "z" * 80]
-    ws.set_column_width(0, 12)
-    ws.set_column_width(2..2, 20)
+    ws.column_width(0, 12)
+    ws.column_width(2..2, 20)
     ws.autofit
 
     widths = column_widths(wb)
@@ -267,7 +267,7 @@ class TestFastXlsx < Minitest::Test
   def test_column_format_applies_to_cells_written_without_a_format
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    ws.set_column_format(1..2, FastXlsx::Format.new(num_format: "#,##0.00"))
+    ws.column_format(1..2, FastXlsx::Format.new(num_format: "#,##0.00"))
     ws << ["a", 1234.5, 2]
 
     xlsx = open_xlsx(wb)
@@ -295,10 +295,10 @@ class TestFastXlsx < Minitest::Test
     assert_predicate open_xlsx(wb).font(1, 1), :bold?
   end
 
-  def test_set_row_height
+  def test_row_height
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    ws.set_row_height(0, 30)
+    ws.row_height(0, 30)
     ws << ["tall"]
 
     assert_match(/<row r="1"[^>]* ht="30" customHeight="1"/, sheet_xml(wb))
@@ -307,17 +307,17 @@ class TestFastXlsx < Minitest::Test
   def test_header_and_footer_with_margin
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    ws.set_header("&CPage &P of &N")
-    ws.set_footer("&L&A", margin: 0.2)
+    ws.page_header("&CPage &P of &N")
+    ws.page_footer("&L&A", margin: 0.2)
 
     xml = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!
     assert_equal ["&CPage &P of &N", "&L&A"], [xml.at("oddHeader").text, xml.at("oddFooter").text]
     assert_equal "0.2", xml.at("pageMargins")["footer"]
   end
 
-  def test_set_margins_keeps_defaults_for_the_rest
+  def test_margins_keeps_defaults_for_the_rest
     wb = FastXlsx::Workbook.new
-    wb.add_worksheet.set_margins(left: 0.5, top: 1)
+    wb.add_worksheet.margins(left: 0.5, top: 1)
 
     margins = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.at("pageMargins")
     assert_equal %w[0.5 0.7 1 0.75], %w[left right top bottom].map { |side| margins[side] }
@@ -326,8 +326,8 @@ class TestFastXlsx < Minitest::Test
   def test_page_breaks
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    ws.set_page_breaks([20, 40])
-    ws.set_vertical_page_breaks([5])
+    ws.page_breaks([20, 40])
+    ws.vertical_page_breaks([5])
 
     xml = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!
     assert_equal %w[20 40], xml.css("rowBreaks brk").map { |b| b["id"] }
@@ -594,9 +594,9 @@ class TestFastXlsx < Minitest::Test
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
     ws << (["x" * 80] * 4)
-    ws.set_column_width(0..3, 10)
-    ws.set_column_width(1, 30)
-    ws.set_column_width(0..3, 12) # the last call wins for column B too
+    ws.column_width(0..3, 10)
+    ws.column_width(1, 30)
+    ws.column_width(0..3, 12) # the last call wins for column B too
     ws.autofit
 
     assert_in_delta 12, column_widths(wb)[2], 1
@@ -609,10 +609,10 @@ class TestFastXlsx < Minitest::Test
     assert_raises(ArgumentError) { FastXlsx::URL.new("https://a", "text", "extra") }
   end
 
-  def test_set_properties_adds_to_earlier_calls
+  def test_properties_adds_to_earlier_calls
     wb = FastXlsx::Workbook.new
-    wb.set_properties(title: "Q3")
-    wb.set_properties(author: "Zac")
+    wb.properties(title: "Q3")
+    wb.properties(author: "Zac")
     wb.add_worksheet
 
     core = Nokogiri::XML(Zip::File.open_buffer(StringIO.new(wb.to_xlsx)).read("docProps/core.xml")).remove_namespaces!
@@ -621,9 +621,9 @@ class TestFastXlsx < Minitest::Test
 
   def test_header_and_footer_over_255_characters_raise
     ws = FastXlsx::Workbook.new.add_worksheet
-    assert_raises(ArgumentError) { ws.set_header("x" * 256) }
-    assert_raises(ArgumentError) { ws.set_footer("x" * 256) }
-    ws.set_header("&[Page]#{"x" * 253}") # &[Page] counts as &P, so this is 255
+    assert_raises(ArgumentError) { ws.page_header("x" * 256) }
+    assert_raises(ArgumentError) { ws.page_footer("x" * 256) }
+    ws.page_header("&[Page]#{"x" * 253}") # &[Page] counts as &P, so this is 255
   end
 
   def test_rich_string_mixes_formats_in_one_cell
@@ -681,18 +681,18 @@ class TestFastXlsx < Minitest::Test
   end
 
   def test_add_table_then_append_fills_the_table
-    [false, true].each do |constant_memory|
-      wb = FastXlsx::Workbook.new(constant_memory: constant_memory)
+    %i[standard constant low].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
       ws = wb.add_worksheet
       ws.add_table(0, 0, 2, 1, columns: %w[Region Sales])
       ws << ["North", 10] << ["South", 20]
 
-      assert_equal [%w[Region Sales], ["North", 10], ["South", 20]], rows(wb), "constant_memory: #{constant_memory}"
+      assert_equal [%w[Region Sales], ["North", 10], ["South", 20]], rows(wb), "memory: #{memory}"
     end
   end
 
   def test_add_table_after_its_header_row_was_flushed_raises
-    wb = FastXlsx::Workbook.new(constant_memory: true)
+    wb = FastXlsx::Workbook.new(memory: :constant)
     ws = wb.add_worksheet
     ws << ["x"] << ["y"] << ["z"]
     assert_raises(FastXlsx::Error) { ws.add_table(0, 0, 2, 0, columns: %w[A]) }
@@ -765,7 +765,7 @@ class TestFastXlsx < Minitest::Test
       "<<" => ->(ws) { rows.each { |r| ws << r } },
       "concat" => ->(ws) { ws.concat(rows) }
     }.each do |name, write|
-      ws = FastXlsx::Workbook.new(constant_memory: true).add_worksheet
+      ws = FastXlsx::Workbook.new(memory: :constant).add_worksheet
       GC.start
       before = GC.stat(:heap_live_slots)
       write.call(ws)
@@ -776,7 +776,7 @@ class TestFastXlsx < Minitest::Test
   end
 
   def test_low_memory_uses_the_shared_string_table
-    wb = FastXlsx::Workbook.new(low_memory: true)
+    wb = FastXlsx::Workbook.new(memory: :low)
     wb.add_worksheet.concat(Array.new(1000) { |i| [i, %w[North South][i % 2]] })
 
     xml = sheet_xml(wb)
@@ -786,25 +786,52 @@ class TestFastXlsx < Minitest::Test
   end
 
   def test_constant_memory_stores_strings_inline
-    wb = FastXlsx::Workbook.new(constant_memory: true)
+    wb = FastXlsx::Workbook.new(memory: :constant)
     wb.add_worksheet << ["North"]
 
     assert_match(/<c r="A1" t="inlineStr">/, sheet_xml(wb))
   end
 
   def test_low_memory_rejects_writes_to_flushed_rows
-    ws = FastXlsx::Workbook.new(low_memory: true).add_worksheet
+    ws = FastXlsx::Workbook.new(memory: :low).add_worksheet
     ws << ["a"] << ["b"]
     assert_raises(FastXlsx::Error) { ws.write(0, 0, "late") }
   end
 
-  def test_constant_memory_and_low_memory_are_exclusive
-    error = assert_raises(ArgumentError) { FastXlsx::Workbook.new(constant_memory: true, low_memory: true) }
-    assert_includes error.message, "not both"
+  def test_unknown_memory_mode_raises
+    error = assert_raises(ArgumentError) { FastXlsx::Workbook.new(memory: :tiny) }
+    assert_includes error.message, "tiny"
+  end
+
+  def test_old_memory_options_are_gone
+    assert_raises(ArgumentError) { FastXlsx::Workbook.new(constant_memory: true) }
+  end
+
+  def test_write_returns_the_worksheet_for_chaining
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_same ws, ws.write(0, 0, "a")
+  end
+
+  def test_set_prefixed_names_are_gone
+    ws = FastXlsx::Workbook.new.add_worksheet
+    %i[set_column_width set_column_format set_row_height set_page_breaks set_vertical_page_breaks
+       set_header set_footer set_margins].each { |m| refute_respond_to ws, m }
+    refute_respond_to FastXlsx::Workbook.new, :set_properties
+  end
+
+  def test_saving_twice_and_writing_after_save
+    %i[standard constant low].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      ws = wb.add_worksheet
+      ws << ["a", 1]
+      assert_equal rows(wb), rows(wb), "save twice, memory: #{memory}"
+      ws << ["b", 2]
+      assert_equal [["a", 1], ["b", 2]], rows(wb), "write after save, memory: #{memory}"
+    end
   end
 
   def test_constant_memory_writes_all_rows
-    wb = FastXlsx::Workbook.new(constant_memory: true)
+    wb = FastXlsx::Workbook.new(memory: :constant)
     wb.add_worksheet.concat(Array.new(1000) { |i| [i, "row #{i}"] })
 
     written = rows(wb)
@@ -813,7 +840,7 @@ class TestFastXlsx < Minitest::Test
   end
 
   def test_constant_memory_rejects_writes_to_flushed_rows
-    wb = FastXlsx::Workbook.new(constant_memory: true)
+    wb = FastXlsx::Workbook.new(memory: :constant)
     ws = wb.add_worksheet
     ws << ["a"] << ["b"]
 
@@ -821,7 +848,7 @@ class TestFastXlsx < Minitest::Test
   end
 
   def test_constant_memory_allows_writes_to_the_current_row
-    wb = FastXlsx::Workbook.new(constant_memory: true)
+    wb = FastXlsx::Workbook.new(memory: :constant)
     ws = wb.add_worksheet
     ws << ["a"]
     ws.write(0, 1, "b")
@@ -834,9 +861,9 @@ class TestFastXlsx < Minitest::Test
     assert_raises(FastXlsx::Error) { wb.add_worksheet("bad[name]") }
   end
 
-  def test_set_properties
+  def test_properties
     wb = FastXlsx::Workbook.new
-    wb.set_properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")
+    wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")
     wb.add_worksheet
 
     zip = Zip::File.open_buffer(StringIO.new(wb.to_xlsx))
@@ -846,8 +873,8 @@ class TestFastXlsx < Minitest::Test
     assert_equal "Acme", app.at("Company").text
   end
 
-  def test_set_properties_rejects_unknown_fields
-    error = assert_raises(ArgumentError) { FastXlsx::Workbook.new.set_properties(titel: "typo") }
+  def test_properties_rejects_unknown_fields
+    error = assert_raises(ArgumentError) { FastXlsx::Workbook.new.properties(titel: "typo") }
     assert_includes error.message, "titel"
   end
 

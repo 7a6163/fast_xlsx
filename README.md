@@ -11,14 +11,14 @@ Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcn
 ```ruby
 require "fast_xlsx"
 
-wb = FastXlsx::Workbook.new                       # or constant_memory: true / low_memory: true, see below
+wb = FastXlsx::Workbook.new                       # or memory: :constant / :low, see below
 ws = wb.add_worksheet("Report")                  # later: wb.worksheet("Report"), wb.worksheets
 
 ws << ["id", "name", "created_at"]                # append a row
 ws.concat(records.map { |r| [r.id, r.name, r.created_at] })  # append many rows in one call
 ws.write(0, 5, 42)                                # write a single cell (row, col, value)
 
-wb.set_properties(title: "Q3 report", author: "Zac", keywords: "Confidential") # File > Info in Excel
+wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential") # File > Info in Excel
 wb.save("report.xlsx")                            # or wb.to_xlsx => binary String
 ```
 
@@ -27,12 +27,12 @@ wb.save("report.xlsx")                            # or wb.to_xlsx => binary Stri
 By default every cell stays in memory until the file is saved. For large exports, two modes write each finished row to a temp file instead:
 
 ```ruby
-FastXlsx::Workbook.new                          # default: everything in memory, any write order
-FastXlsx::Workbook.new(constant_memory: true)   # rows on disk, strings stored inline in each cell
-FastXlsx::Workbook.new(low_memory: true)        # rows on disk, strings in Excel's shared string table
+FastXlsx::Workbook.new                          # memory: :standard (default): everything in memory, any write order
+FastXlsx::Workbook.new(memory: :constant)       # rows on disk, strings stored inline in each cell
+FastXlsx::Workbook.new(memory: :low)            # rows on disk, strings in Excel's shared string table
 ```
 
-| | default | `constant_memory` | `low_memory` |
+| | `:standard` (default) | `:constant` | `:low` |
 |---|---|---|---|
 | Finished rows | kept in memory | written to disk | written to disk |
 | Memory grows with | all cells | nothing (flat) | the number of unique strings |
@@ -43,11 +43,11 @@ FastXlsx::Workbook.new(low_memory: true)        # rows on disk, strings in Excel
 
 Which one:
 
-- **default** for normal reports, when you need to go back and change earlier rows, or rely on `autofit`.
-- **`constant_memory`** for large exports written row by row: memory stays flat whatever the data, and it is the fastest mode.
-- **`low_memory`** for large exports that other programs will read: memory stays low when strings repeat (regions, statuses, …) and the file uses the standard shared string table. With many unique strings it keeps those strings in memory until `save`.
+- **`:standard`** for normal reports, when you need to go back and change earlier rows, or rely on `autofit`.
+- **`:constant`** for large exports written row by row: memory stays flat whatever the data, and it is the fastest mode.
+- **`:low`** for large exports that other programs will read: memory stays low when strings repeat (regions, statuses, …) and the file uses the standard shared string table. With many unique strings it keeps those strings in memory until `save`.
 
-In both disk-backed modes, writing to a row that was already written to disk raises `FastXlsx::Error`, and tables must be added before their data (see [Tables](#tables)). The two options can't be combined.
+In both disk-backed modes, writing to a row that was already written to disk raises `FastXlsx::Error`, and tables must be added before their data (see [Tables](#tables)). An unknown mode raises `ArgumentError`.
 
 ### Formats
 
@@ -81,26 +81,26 @@ Per-side borders override `border`. Unknown options and invalid values raise `Ar
 ### Columns and filters
 
 ```ruby
-ws.set_column_width(0, 20)        # column A, width in characters
-ws.set_column_width(1..3, 12)     # columns B–D
-ws.set_column_format(4, FastXlsx::Format.new(num_format: "#,##0.00")) # default for cells in E written without a format
+ws.column_width(0, 20)        # column A, width in characters
+ws.column_width(1..3, 12)     # columns B–D
+ws.column_format(4, FastXlsx::Format.new(num_format: "#,##0.00")) # default for cells in E written without a format
 ws.autofit                        # size other columns to the data written so far; set widths are kept
 ws.autofilter(0, 0, 100, 3)       # filter buttons on A1:D101 (first_row, first_col, last_row, last_col)
 ```
 
-`autofit` only sees rows still in memory, so in `constant_memory` / `low_memory` mode it ignores rows already written to disk; set widths with `set_column_width` instead.
+`autofit` only sees rows still in memory, so in `:constant` / `:low` memory mode it ignores rows already written to disk; set widths with `column_width` instead.
 
 ### Layout
 
 ```ruby
 ws.freeze_panes(1, 0)                          # keep the first row visible while scrolling
-ws.set_row_height(0, 30)                       # row 1, height in points
+ws.row_height(0, 30)                       # row 1, height in points
 ws.merge_range(0, 0, 0, 3, "Q3 report", title) # merge A1:D1; the value can be any cell type
-ws.set_page_breaks([50, 100])                  # print a new page before rows 51 and 101
-ws.set_vertical_page_breaks([8])               # and before column I
-ws.set_header("&CPage &P of &N")               # printed header, Excel header/footer codes
-ws.set_footer("&L&A", margin: 0.2)             # sheet name on the left; margin in inches
-ws.set_margins(left: 0.5, top: 1)              # other margins keep Excel's defaults
+ws.page_breaks([50, 100])                  # print a new page before rows 51 and 101
+ws.vertical_page_breaks([8])               # and before column I
+ws.page_header("&CPage &P of &N")               # printed header, Excel header/footer codes
+ws.page_footer("&L&A", margin: 0.2)             # sheet name on the left; margin in inches
+ws.margins(left: 0.5, top: 1)              # other margins keep Excel's defaults
 ```
 
 ### Conditional formats
@@ -164,7 +164,7 @@ ws.add_table(0, 0, sales.size + 1, 2, total_row: true, style: :medium2, # +1 row
 
 The range includes the header row and, with `total_row: true`, the total row; the table writes the headers. `columns` must match the range width. Options: `style` (`:light1`–`:light21`, `:medium1`–`:medium28`, `:dark1`–`:dark11`, `:none`), `name`, `total_row`, `banded_rows`, `autofilter`. Column totals: `:sum`, `:average`, `:count`, `:count_numbers`, `:max`, `:min`, `:std_dev`, `:var`.
 
-You can also add the table first and then append the data: after `add_table`, `<<` / `append` / `concat` continue right under the header row. In `constant_memory` / `low_memory` mode this is the only order that works; adding a table whose header row was already written to disk raises `FastXlsx::Error`.
+You can also add the table first and then append the data: after `add_table`, `<<` / `append` / `concat` continue right under the header row. In `:constant` / `:low` memory mode this is the only order that works; adding a table whose header row was already written to disk raises `FastXlsx::Error`.
 
 ### Charts
 
@@ -196,7 +196,7 @@ Values are mapped by type:
 | `nil` | empty cell |
 | anything else | `to_s` as string |
 
-`<<` and `concat` append after the last row written to that worksheet. In `constant_memory` / `low_memory` mode rows are written to disk as you go, so fill each worksheet top to bottom.
+`<<` and `concat` append after the last row written to that worksheet. In `:constant` / `:low` memory mode rows are written to disk as you go, so fill each worksheet top to bottom.
 
 Errors from the writer (invalid sheet names, writes to rows already on disk, …) raise `FastXlsx::Error`.
 
@@ -210,8 +210,8 @@ Apple Silicon, Ruby 4.0.5. Each library uses its own idiomatic row-append API; x
 
 | Library | Time | vs fastest | Ruby objects allocated |
 |---|---:|---:|---:|
-| **fast_xlsx** (constant_memory) | **92 ms** | 1.0x | 7 |
-| **fast_xlsx** (low_memory) | **101 ms** | 1.1x | 7 |
+| **fast_xlsx** (`memory: :constant`) | **92 ms** | 1.0x | 7 |
+| **fast_xlsx** (`memory: :low`) | **101 ms** | 1.1x | 7 |
 | **fast_xlsx** | **102 ms** | 1.1x | 10 |
 | [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 181 ms | 2.0x | 561,728 |
 | [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 202 ms | 2.2x | 20,079 |
@@ -228,13 +228,13 @@ All outputs are 702–750 KB.
 
 | Library | Unique strings | Repeated strings |
 |---|---:|---:|
-| **fast_xlsx** (constant_memory) | **+2 MB** | **+2 MB** |
-| **fast_xlsx** (low_memory) | +62 MB | **+2 MB** |
+| **fast_xlsx** (`memory: :constant`) | **+2 MB** | **+2 MB** |
+| **fast_xlsx** (`memory: :low`) | +62 MB | **+2 MB** |
 | **fast_xlsx** | +270 MB | +217 MB |
 | fast_excel 0.5 (constant_memory) | +10 MB | +10 MB |
 | fast_excel 0.5 | +183 MB | +151 MB |
 
-The default mode uses more memory than fast_excel's: when saving, rust_xlsxwriter assembles each worksheet's XML in memory (so several worksheets can be built in parallel) instead of streaming it from a temp file. Use `constant_memory` or `low_memory` for large exports.
+The `:standard` mode uses more memory than fast_excel's: when saving, rust_xlsxwriter assembles each worksheet's XML in memory (so several worksheets can be built in parallel) instead of streaming it from a temp file. Use `memory: :constant` or `memory: :low` for large exports.
 
 ### Reproduce
 
