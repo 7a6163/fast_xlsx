@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
   spec.homepage = "https://github.com/7a6163/fast_xlsx"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.3.0"
-  spec.metadata["allowed_push_host"] = "https://rubygems.org"
+  spec.metadata["github_repo"] = "ssh://github.com/7a6163/fast_xlsx" # links the GitHub Packages gem to this repo
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"

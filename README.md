@@ -102,6 +102,16 @@ cargo llvm-cov report --release                     # or --lcov / --html
 
 Rebuild in a clean shell afterwards (`rm -rf tmp && bundle exec rake compile`) so the everyday build is not instrumented.
 
+### Releasing
+
+Bump `FastXlsx::VERSION`, update `CHANGELOG.md`, commit, then push a matching tag:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The `Build gems` workflow builds the source gem plus precompiled gems for each platform and pushes them to RubyGems (trusted publishing) and GitHub Packages. It refuses to publish if the tag and `VERSION` differ.
+
 ## License
 
 MIT
