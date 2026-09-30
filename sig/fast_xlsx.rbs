@@ -56,6 +56,11 @@ module FastXlsx
                              type: :cell | :text | :formula | :data_bar | :color_scale,
                              ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
                              ?format: Format, ?colors: 2 | 3) -> self
+    def data_validation: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
+                          type: :list | :whole_number | :decimal | :text_length,
+                          ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
+                          ?input_title: String, ?input_message: String,
+                          ?error_title: String, ?error_message: String) -> self
     def name: () -> String
     def next_row: () -> Integer
   end

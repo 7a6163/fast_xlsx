@@ -91,6 +91,18 @@ ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; col
 | `:formula` | — | formula string, relative to the top-left cell |
 | `:data_bar`, `:color_scale` | — | — |
 
+### Data validation
+
+```ruby
+ws.data_validation(1, 2, 100, 2, type: :list, value: %w[Open Closed])     # dropdown in C2:C101
+ws.data_validation(1, 2, 100, 2, type: :list, value: "=$Z$1:$Z$10")       # dropdown from a range
+ws.data_validation(1, 3, 100, 3, type: :whole_number, criteria: :between, value: [1, 10],
+                   input_title: "Quantity", input_message: "1 to 10",
+                   error_title: "Invalid", error_message: "Enter a whole number from 1 to 10")
+```
+
+`type` is `:list`, `:whole_number`, `:decimal` or `:text_length`; the number types take the same `criteria` as `:cell` conditional formats.
+
 Values are mapped by type:
 
 | Ruby | Excel |

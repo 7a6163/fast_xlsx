@@ -73,6 +73,12 @@ module FastXlsx
       _conditional_format(first_row, first_col, last_row, last_col, { type: type, ** })
     end
 
+    # Restricts what can be entered in the range. type: :list, :whole_number,
+    # :decimal or :text_length; see the README for the options.
+    def data_validation(first_row, first_col, last_row, last_col, type:, **)
+      _data_validation(first_row, first_col, last_row, last_col, { type: type, ** })
+    end
+
     # Default format for cells in these columns that are written without one.
     def set_column_format(columns, format)
       _set_column_format(*column_bounds(columns), format)

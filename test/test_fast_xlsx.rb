@@ -395,6 +395,50 @@ class TestFastXlsx < Minitest::Test
     assert_includes error.message, "~"
   end
 
+  def test_data_validation_list_of_strings
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.data_validation(1, 2, 9, 2, type: :list, value: %w[Open Closed])
+
+    assert_equal ["C2:C10", "list", '"Open,Closed"'], data_validations(wb).first.values_at(:sqref, :type, :formula1)
+  end
+
+  def test_data_validation_list_from_a_range
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.data_validation(0, 0, 0, 0, type: :list, value: "=$Z$1:$Z$3")
+
+    assert_equal %w[list $Z$1:$Z$3], data_validations(wb).first.values_at(:type, :formula1)
+  end
+
+  def test_data_validation_number_rules
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.data_validation(0, 0, 0, 0, type: :whole_number, criteria: :between, value: [1, 10])
+    ws.data_validation(0, 1, 0, 1, type: :decimal, criteria: :>=, value: 0.5)
+    ws.data_validation(0, 2, 0, 2, type: :text_length, criteria: :<=, value: 50)
+
+    assert_equal([
+                   ["whole", nil, "1", "10"],
+                   ["decimal", "greaterThanOrEqual", "0.5", nil],
+                   ["textLength", "lessThanOrEqual", "50", nil]
+                 ], data_validations(wb).map { |dv| dv.values_at(:type, :operator, :formula1, :formula2) })
+  end
+
+  def test_data_validation_messages
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.data_validation(0, 0, 0, 0, type: :list, value: %w[Y N],
+                                                 input_title: "Pick", input_message: "Y or N",
+                                                 error_title: "Oops", error_message: "Only Y or N")
+
+    assert_equal ["Pick", "Y or N", "Oops", "Only Y or N"],
+                 data_validations(wb).first.values_at(:input_title, :input_message, :error_title, :error_message)
+  end
+
+  def test_data_validation_rejects_unknown_type
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.data_validation(0, 0, 0, 0, type: :email) }
+    assert_includes error.message, "email"
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

@@ -63,6 +63,19 @@ module XlsxHelpers
     end
   end
 
+  # Data validation rules of sheet 1.
+  def data_validations(workbook)
+    sheet = Nokogiri::XML(sheet_xml(workbook)).remove_namespaces!
+    sheet.css("dataValidations > dataValidation").map do |dv|
+      {
+        sqref: dv["sqref"], type: dv["type"], operator: dv["operator"],
+        formula1: dv.at("formula1")&.text, formula2: dv.at("formula2")&.text,
+        input_title: dv["promptTitle"], input_message: dv["prompt"],
+        error_title: dv["errorTitle"], error_message: dv["error"]
+      }
+    end
+  end
+
   private
 
   def style_hash(styles, cell_xf)

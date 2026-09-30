@@ -9,8 +9,9 @@ use magnus::{
 use rust_xlsxwriter::{
     Color, ConditionalFormat2ColorScale, ConditionalFormat3ColorScale, ConditionalFormatCell,
     ConditionalFormatCellRule, ConditionalFormatDataBar, ConditionalFormatFormula,
-    ConditionalFormatText, ConditionalFormatTextRule, ConditionalFormatValue, FormatAlign,
-    FormatBorder, FormatScript, FormatUnderline, IntoExcelData, XlsxError,
+    ConditionalFormatText, ConditionalFormatTextRule, ConditionalFormatValue, DataValidation,
+    DataValidationRule, FormatAlign, FormatBorder, FormatScript, FormatUnderline,
+    IntoDataValidationValue, IntoExcelData, XlsxError,
 };
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
@@ -219,15 +220,17 @@ fn cf_value(ruby: &Ruby, v: Value) -> Result<ConditionalFormatValue, Error> {
     }
 }
 
-fn cell_rule(
+// A comparison criteria and its operand(s): one value, or [min, max] for the
+// range criteria.
+fn comparison(
     ruby: &Ruby,
+    what: &str,
     criteria: Value,
     value: Value,
-) -> Result<ConditionalFormatCellRule<ConditionalFormatValue>, Error> {
-    use ConditionalFormatCellRule as Rule;
+) -> Result<(&'static str, Value, Option<Value>), Error> {
     let op = choice(
         ruby,
-        "cell criteria",
+        what,
         criteria,
         &[
             ("==", "=="),
@@ -240,34 +243,57 @@ fn cell_rule(
             ("not_between", "not_between"),
         ],
     )?;
-    if op == "between" || op == "not_between" {
-        let bounds = RArray::from_value(value)
-            .filter(|a| a.len() == 2)
-            .ok_or_else(|| {
-                Error::new(
-                    ruby.exception_arg_error(),
-                    format!("{op} needs value: [min, max], got {}", value.inspect()),
-                )
-            })?;
-        let (min, max) = (
-            cf_value(ruby, bounds.entry(0)?)?,
-            cf_value(ruby, bounds.entry(1)?)?,
-        );
-        return Ok(if op == "between" {
-            Rule::Between(min, max)
-        } else {
-            Rule::NotBetween(min, max)
-        });
+    if op != "between" && op != "not_between" {
+        return Ok((op, value, None));
     }
-    let v = cf_value(ruby, value)?;
-    Ok(match op {
-        "==" => Rule::EqualTo(v),
-        "!=" => Rule::NotEqualTo(v),
-        ">" => Rule::GreaterThan(v),
-        ">=" => Rule::GreaterThanOrEqualTo(v),
-        "<" => Rule::LessThan(v),
-        _ => Rule::LessThanOrEqualTo(v),
-    })
+    let bounds = RArray::from_value(value)
+        .filter(|a| a.len() == 2)
+        .ok_or_else(|| {
+            Error::new(
+                ruby.exception_arg_error(),
+                format!("{op} needs value: [min, max], got {}", value.inspect()),
+            )
+        })?;
+    Ok((op, bounds.entry(0)?, Some(bounds.entry(1)?)))
+}
+
+// Maps a comparison() result onto a rust_xlsxwriter rule enum, converting the
+// operands with $convert.
+macro_rules! comparison_rule {
+    ($Rule:ident, $cmp:expr, $convert:expr) => {{
+        let (op, a, b) = $cmp;
+        let a = $convert(a)?;
+        match (op, b) {
+            ("between", Some(b)) => $Rule::Between(a, $convert(b)?),
+            ("not_between", Some(b)) => $Rule::NotBetween(a, $convert(b)?),
+            ("==", _) => $Rule::EqualTo(a),
+            ("!=", _) => $Rule::NotEqualTo(a),
+            (">", _) => $Rule::GreaterThan(a),
+            (">=", _) => $Rule::GreaterThanOrEqualTo(a),
+            ("<", _) => $Rule::LessThan(a),
+            _ => $Rule::LessThanOrEqualTo(a),
+        }
+    }};
+}
+
+fn cell_rule(
+    ruby: &Ruby,
+    criteria: Value,
+    value: Value,
+) -> Result<ConditionalFormatCellRule<ConditionalFormatValue>, Error> {
+    let cmp = comparison(ruby, "cell criteria", criteria, value)?;
+    Ok(comparison_rule!(ConditionalFormatCellRule, cmp, |v| {
+        cf_value(ruby, v)
+    }))
+}
+
+fn validation_rule<T: TryConvert + IntoDataValidationValue>(
+    ruby: &Ruby,
+    criteria: Value,
+    value: Value,
+) -> Result<DataValidationRule<T>, Error> {
+    let cmp = comparison(ruby, "validation criteria", criteria, value)?;
+    Ok(comparison_rule!(DataValidationRule, cmp, T::try_convert))
 }
 
 const BORDERS: &[(&str, FormatBorder)] = &[
@@ -655,6 +681,64 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn data_validation(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        fr: u32,
+        fc: u16,
+        lr: u32,
+        lc: u16,
+        options: RHash,
+    ) -> Result<Obj<Self>, Error> {
+        let nil = ruby.qnil().as_value();
+        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        let (criteria, value) = (opt("criteria"), opt("value"));
+        let dv = DataValidation::new();
+        let mut dv = match choice(
+            ruby,
+            "data validation type",
+            opt("type"),
+            &[
+                ("list", "list"),
+                ("whole_number", "whole_number"),
+                ("decimal", "decimal"),
+                ("text_length", "text_length"),
+            ],
+        )? {
+            "list" => match RArray::from_value(value) {
+                Some(items) => dv
+                    .allow_list_strings(&items.to_vec::<String>()?)
+                    .map_err(xerr)?,
+                None => dv
+                    .allow_list_formula(rust_xlsxwriter::Formula::new(String::try_convert(value)?)),
+            },
+            "whole_number" => dv.allow_whole_number(validation_rule(ruby, criteria, value)?),
+            "decimal" => dv.allow_decimal_number(validation_rule(ruby, criteria, value)?),
+            _ => dv.allow_text_length(validation_rule(ruby, criteria, value)?),
+        };
+        for (name, set) in [
+            (
+                "input_title",
+                DataValidation::set_input_title as fn(_, String) -> _,
+            ),
+            ("input_message", DataValidation::set_input_message),
+            ("error_title", DataValidation::set_error_title),
+            ("error_message", DataValidation::set_error_message),
+        ] {
+            let text = opt(name);
+            if !text.is_nil() {
+                dv = set(dv, String::try_convert(text)?).map_err(xerr)?;
+            }
+        }
+        rb_self.with_ws(|ws| {
+            ws.add_data_validation(fr, fc, lr, lc, &dv)
+                .map(|_| ())
+                .map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
     fn name(&self) -> Result<String, Error> {
         self.with_ws(|ws| Ok(ws.name()))
     }
@@ -689,6 +773,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "_conditional_format",
         method!(Worksheet::conditional_format, 5),
     )?;
+    ws.define_method("_data_validation", method!(Worksheet::data_validation, 5))?;
     ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
     ws.define_method("set_row_height", method!(Worksheet::set_row_height, 2))?;
     ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;
