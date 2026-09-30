@@ -775,6 +775,34 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  def test_low_memory_uses_the_shared_string_table
+    wb = FastXlsx::Workbook.new(low_memory: true)
+    wb.add_worksheet.concat(Array.new(1000) { |i| [i, %w[North South][i % 2]] })
+
+    xml = sheet_xml(wb)
+    assert_match(/<c r="B1" t="s">/, xml)
+    refute_match(/inlineStr/, xml)
+    assert_equal [999, "South"], rows(wb).last
+  end
+
+  def test_constant_memory_stores_strings_inline
+    wb = FastXlsx::Workbook.new(constant_memory: true)
+    wb.add_worksheet << ["North"]
+
+    assert_match(/<c r="A1" t="inlineStr">/, sheet_xml(wb))
+  end
+
+  def test_low_memory_rejects_writes_to_flushed_rows
+    ws = FastXlsx::Workbook.new(low_memory: true).add_worksheet
+    ws << ["a"] << ["b"]
+    assert_raises(FastXlsx::Error) { ws.write(0, 0, "late") }
+  end
+
+  def test_constant_memory_and_low_memory_are_exclusive
+    error = assert_raises(ArgumentError) { FastXlsx::Workbook.new(constant_memory: true, low_memory: true) }
+    assert_includes error.message, "not both"
+  end
+
   def test_constant_memory_writes_all_rows
     wb = FastXlsx::Workbook.new(constant_memory: true)
     wb.add_worksheet.concat(Array.new(1000) { |i| [i, "row #{i}"] })

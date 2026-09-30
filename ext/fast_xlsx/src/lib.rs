@@ -42,6 +42,7 @@ type Shared = Arc<Mutex<rust_xlsxwriter::Workbook>>;
 struct Workbook {
     inner: Shared,
     constant_memory: bool,
+    low_memory: bool,
 }
 
 #[magnus::wrap(class = "FastXlsx::Worksheet", free_immediately)]
@@ -49,20 +50,24 @@ struct Worksheet {
     wb: Shared,
     index: usize,
     next_row: Cell<u32>,
-    constant_memory: bool,
+    // constant_memory and low_memory worksheets write finished rows to disk.
+    flushes_rows: bool,
 }
 
 impl Workbook {
-    fn new(constant_memory: bool) -> Self {
+    fn new(constant_memory: bool, low_memory: bool) -> Self {
         Workbook {
             inner: Arc::new(Mutex::new(rust_xlsxwriter::Workbook::new())),
             constant_memory,
+            low_memory,
         }
     }
 
     fn add_worksheet(&self, name: Option<String>) -> Result<Worksheet, Error> {
         let mut wb = self.inner.lock().unwrap();
-        let ws = if self.constant_memory {
+        let ws = if self.low_memory {
+            wb.add_worksheet_with_low_memory()
+        } else if self.constant_memory {
             wb.add_worksheet_with_constant_memory()
         } else {
             wb.add_worksheet()
@@ -74,7 +79,7 @@ impl Workbook {
             wb: self.inner.clone(),
             index: wb.worksheets().len() - 1,
             next_row: Cell::new(0),
-            constant_memory: self.constant_memory,
+            flushes_rows: self.constant_memory || self.low_memory,
         })
     }
 
@@ -673,10 +678,12 @@ impl Worksheet {
 
     // rust_xlsxwriter silently drops writes to rows it has already flushed.
     fn check_not_flushed(&self, ruby: &Ruby, row: u32) -> Result<(), Error> {
-        if self.constant_memory && row + 1 < self.next_row.get() {
+        if self.flushes_rows && row + 1 < self.next_row.get() {
             return Err(Error::new(
                 ruby.get_inner(&ERROR),
-                format!("row {row} was already flushed in constant_memory mode"),
+                format!(
+                    "row {row} was already written to disk (constant_memory / low_memory mode)"
+                ),
             ));
         }
         Ok(())
@@ -1285,7 +1292,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.define_module("FastXlsx")?;
 
     let wb = module.define_class("Workbook", ruby.class_object())?;
-    wb.define_singleton_method("_new", function!(Workbook::new, 1))?;
+    wb.define_singleton_method("_new", function!(Workbook::new, 2))?;
     wb.define_method("_add_worksheet", method!(Workbook::add_worksheet, 1))?;
     wb.define_method("to_xlsx", method!(Workbook::to_xlsx, 0))?;
     wb.define_method("save", method!(Workbook::save, 1))?;

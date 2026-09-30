@@ -49,10 +49,14 @@ module FastXlsx
 
   # Owns the worksheets; serialize with #to_xlsx or #save.
   class Workbook
-    # constant_memory: rows are flushed to disk as they are written, so each
-    # worksheet must be filled top to bottom.
-    def self.new(constant_memory: false)
-      _new(constant_memory)
+    # constant_memory: / low_memory: write each finished row to disk, so each
+    # worksheet must be filled top to bottom. constant_memory stores strings
+    # inline (memory stays flat); low_memory keeps Excel's shared string table
+    # (memory grows with the number of unique strings, output is standard).
+    def self.new(constant_memory: false, low_memory: false)
+      raise ArgumentError, "use constant_memory: or low_memory:, not both" if constant_memory && low_memory
+
+      _new(constant_memory, low_memory)
     end
 
     def add_worksheet(name = nil)

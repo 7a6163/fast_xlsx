@@ -27,7 +27,7 @@ module FastXlsx
   end
 
   class Workbook
-    def self.new: (?constant_memory: bool) -> Workbook
+    def self.new: (?constant_memory: bool, ?low_memory: bool) -> Workbook
     def add_worksheet: (?String? name) -> Worksheet
     def worksheets: () -> Array[Worksheet]
     def worksheet: (String name) -> Worksheet?
