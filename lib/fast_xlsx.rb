@@ -15,9 +15,17 @@ module FastXlsx
 
   # Cell value written as a hyperlink, e.g. URL.new("https://example.com").
   # text: shown in the cell instead of the URL itself.
-  # Subclassed (not a Data.define block) so .new can call super with keywords.
+  # Subclassed (not a Data.define block) so .new can call super, which lets it
+  # accept URL.new(url, text: ...) as well as the usual Data forms.
   class URL < Data.define(:url, :text) # rubocop:disable Style/DataInheritance
-    def self.new(url, text: nil)
+    def self.new(*args, **kwargs)
+      kwargs[:url] = args[0] unless args.empty?
+      kwargs[:text] = args[1] if args.size > 1
+      super(**kwargs)
+    end
+
+    # Also reached by URL[...] and #with, so values are normalized here.
+    def initialize(url:, text: nil)
       super(url: url.to_s, text: text&.to_s)
     end
   end
@@ -49,8 +57,11 @@ module FastXlsx
 
     # Document properties shown in Excel's File > Info: title:, subject:,
     # author:, manager:, company:, category:, keywords:, comments:, status:.
+    # Later calls add to earlier ones.
     def set_properties(**fields)
-      _set_properties(fields)
+      merged = (@properties || {}).merge(fields)
+      _set_properties(merged) # validates before anything is remembered
+      @properties = merged
       self
     end
   end
@@ -69,7 +80,9 @@ module FastXlsx
     def set_column_width(columns, width)
       bounds = column_bounds(columns)
       _set_column_width(*bounds, width)
-      (@fixed_widths ||= {})[bounds] = width
+      @fixed_widths ||= {}
+      @fixed_widths.delete(bounds) # re-insert so autofit replays calls in order
+      @fixed_widths[bounds] = width
       self
     end
 

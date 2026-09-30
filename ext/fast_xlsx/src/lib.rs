@@ -328,6 +328,32 @@ fn validation_rule<T: TryConvert + IntoDataValidationValue>(
     Ok(comparison_rule!(DataValidationRule, cmp, T::try_convert))
 }
 
+// Excel's 255-character limit, counted the way rust_xlsxwriter does (with the
+// long &[Page]-style codes shortened), which otherwise drops the text silently.
+fn check_header_footer(ruby: &Ruby, what: &str, text: &str) -> Result<(), Error> {
+    let mut expanded = text.to_string();
+    for (long, short) in [
+        ("&[Tab]", "&A"),
+        ("&[Date]", "&D"),
+        ("&[File]", "&F"),
+        ("&[Page]", "&P"),
+        ("&[Path]", "&Z"),
+        ("&[Time]", "&T"),
+        ("&[Pages]", "&N"),
+        ("&[Picture]", "&G"),
+    ] {
+        expanded = expanded.replace(long, short);
+    }
+    let len = expanded.chars().count();
+    if len > 255 {
+        return Err(Error::new(
+            ruby.exception_arg_error(),
+            format!("{what} is {len} characters; Excel allows 255"),
+        ));
+    }
+    Ok(())
+}
+
 // Rejects option keys outside `allowed`, so a typo raises instead of being ignored.
 fn check_keys(ruby: &Ruby, options: RHash, allowed: &[&str], what: &str) -> Result<(), Error> {
     options.foreach(|key: Symbol, _: Value| {
@@ -613,15 +639,17 @@ impl Worksheet {
         Ok(rb_self)
     }
 
-    fn set_header(&self, text: String) -> Result<(), Error> {
-        self.with_ws(|ws| {
+    fn set_header(ruby: &Ruby, rb_self: &Self, text: String) -> Result<(), Error> {
+        check_header_footer(ruby, "header", &text)?;
+        rb_self.with_ws(|ws| {
             ws.set_header(text);
             Ok(())
         })
     }
 
-    fn set_footer(&self, text: String) -> Result<(), Error> {
-        self.with_ws(|ws| {
+    fn set_footer(ruby: &Ruby, rb_self: &Self, text: String) -> Result<(), Error> {
+        check_header_footer(ruby, "footer", &text)?;
+        rb_self.with_ws(|ws| {
             ws.set_footer(text);
             Ok(())
         })

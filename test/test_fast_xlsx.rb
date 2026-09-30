@@ -590,6 +590,41 @@ class TestFastXlsx < Minitest::Test
     assert_raises(ArgumentError) { ws.insert_chart(0, 0, type: :column, series: []) }
   end
 
+  def test_autofit_restores_widths_in_the_order_they_were_set
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws << (["x" * 80] * 4)
+    ws.set_column_width(0..3, 10)
+    ws.set_column_width(1, 30)
+    ws.set_column_width(0..3, 12) # the last call wins for column B too
+    ws.autofit
+
+    assert_in_delta 12, column_widths(wb)[2], 1
+  end
+
+  def test_url_constructor_forms
+    assert_equal FastXlsx::URL.new("https://a"), FastXlsx::URL.new(url: "https://a")
+    assert_equal FastXlsx::URL.new("https://a"), FastXlsx::URL["https://a"]
+    assert_equal "5", FastXlsx::URL.new("https://a").with(text: 5).text
+  end
+
+  def test_set_properties_adds_to_earlier_calls
+    wb = FastXlsx::Workbook.new
+    wb.set_properties(title: "Q3")
+    wb.set_properties(author: "Zac")
+    wb.add_worksheet
+
+    core = Nokogiri::XML(Zip::File.open_buffer(StringIO.new(wb.to_xlsx)).read("docProps/core.xml")).remove_namespaces!
+    assert_equal %w[Q3 Zac], [core.at("title")&.text, core.at("creator")&.text]
+  end
+
+  def test_header_and_footer_over_255_characters_raise
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(ArgumentError) { ws.set_header("x" * 256) }
+    assert_raises(ArgumentError) { ws.set_footer("x" * 256) }
+    ws.set_header("&[Page]#{"x" * 253}") # &[Page] counts as &P, so this is 255
+  end
+
   def test_option_typos_raise_instead_of_being_ignored
     ws = FastXlsx::Workbook.new.add_worksheet
     png = -> { StringIO.new(PNG_1X1) }
