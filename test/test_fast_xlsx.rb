@@ -949,6 +949,28 @@ class TestFastXlsx < Minitest::Test
     assert_raises(FastXlsx::Error) { wb.add_worksheet("bad[name]") }
   end
 
+  def test_invalid_sheet_name_leaves_no_sheet_behind
+    %i[standard constant].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      assert_raises(FastXlsx::Error) { wb.add_worksheet("x" * 40) }
+      wb.add_worksheet("Good") << ["ok"]
+
+      assert_equal %w[Good], open_xlsx(wb).sheets, "memory: #{memory}"
+      assert_equal %w[Good], wb.worksheets.map(&:name)
+    end
+  end
+
+  # Excel sheet names are case-insensitive; the clash should surface at
+  # add_worksheet, not at save.
+  def test_duplicate_sheet_name_raises_when_added
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet("Data")
+    error = assert_raises(FastXlsx::Error) { wb.add_worksheet("data") }
+    assert_includes error.message, "data"
+
+    assert_equal %w[Data], open_xlsx(wb).sheets
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")

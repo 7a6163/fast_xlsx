@@ -74,7 +74,30 @@ impl Workbook {
     }
 
     fn add_worksheet(&self, name: Option<String>) -> Result<Worksheet, Error> {
+        // Validate the name before adding: rust_xlsxwriter adds the sheet
+        // first, so a bad name would leave an unnamed "SheetN" behind.
+        if let Some(name) = &name {
+            rust_xlsxwriter::Worksheet::new()
+                .set_name(name)
+                .map_err(xerr)?;
+        }
         let mut wb = self.inner.lock().unwrap();
+        // Excel sheet names are case-insensitive; rust_xlsxwriter only notices
+        // a clash when saving.
+        if let Some(name) = &name {
+            let lower = name.to_lowercase();
+            if wb
+                .worksheets()
+                .iter()
+                .any(|ws| ws.name().to_lowercase() == lower)
+            {
+                let ruby = Ruby::get().unwrap();
+                return Err(Error::new(
+                    ruby.get_inner(&ERROR),
+                    format!("a worksheet named {name:?} already exists (names ignore case)"),
+                ));
+            }
+        }
         let ws = if self.low_memory {
             wb.add_worksheet_with_low_memory()
         } else if self.constant_memory {
