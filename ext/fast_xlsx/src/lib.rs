@@ -282,8 +282,7 @@ impl CellValue {
                 RefCell::new(rust_xlsxwriter::Worksheet::new());
         }
         match self {
-            // Counting chars is only needed when the bytes could exceed it.
-            CellValue::Text(s) if s.len() > MAX_CHARS && s.chars().count() > MAX_CHARS => {
+            CellValue::Text(s) if s.chars().count() > MAX_CHARS => {
                 Err(xerr(XlsxError::MaxStringLengthExceeded))
             }
             // URLs and rich strings have more rules; let the writer apply them.

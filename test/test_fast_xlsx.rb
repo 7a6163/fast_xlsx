@@ -915,6 +915,16 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  # The limit counts characters, not bytes: "é" is 2 bytes.
+  def test_strings_up_to_excels_limit_are_written
+    longest = "é#{"x" * 32_766}" # 32,767 characters, 32,768 bytes
+    multibyte = "é" * 20_000
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [longest, multibyte]
+
+    assert_equal [[longest, multibyte]], rows(wb)
+  end
+
   def test_a_row_with_more_columns_than_excel_allows_leaves_no_cells
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
