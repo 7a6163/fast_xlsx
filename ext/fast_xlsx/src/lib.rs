@@ -213,6 +213,11 @@ fn emit<T: IntoExcelData>(
     .map_err(xerr)
 }
 
+// Excel's limit on the text in a cell.
+const MAX_CHARS: usize = 32_767;
+// Excel's column count.
+const MAX_COLS: usize = 16_384;
+
 // A cell value converted from Ruby. Converting may run Ruby code (to_s, jd,
 // url, ...), so it happens before the workbook lock is taken: Ruby code that
 // touches the same workbook, or another thread, would otherwise deadlock on it.
@@ -233,7 +238,7 @@ enum CellValue {
 
 impl CellValue {
     fn from_ruby(ruby: &Ruby, v: Value) -> Result<Self, Error> {
-        Ok(if v.is_nil() {
+        let value = if v.is_nil() {
             CellValue::Empty
         } else if let Some(s) = RString::from_value(v) {
             // Other encodings (e.g. Windows-1252 / Big5 from a legacy CSV) are
@@ -263,7 +268,30 @@ impl CellValue {
             CellValue::Number(excel_date(v)?)
         } else {
             CellValue::Text(v.funcall("to_s", ())?)
-        })
+        };
+        value.check()?;
+        Ok(value)
+    }
+
+    // Rejects what the writer would, so a row or merge fails before anything
+    // is written. Numbers, booleans and formulas only fail on a bad row/column.
+    fn check(&self) -> Result<(), Error> {
+        thread_local! {
+            // Reused: every check writes to A1, replacing the one before.
+            static SCRATCH: RefCell<rust_xlsxwriter::Worksheet> =
+                RefCell::new(rust_xlsxwriter::Worksheet::new());
+        }
+        match self {
+            // Counting chars is only needed when the bytes could exceed it.
+            CellValue::Text(s) if s.len() > MAX_CHARS && s.chars().count() > MAX_CHARS => {
+                Err(xerr(XlsxError::MaxStringLengthExceeded))
+            }
+            // URLs and rich strings have more rules; let the writer apply them.
+            CellValue::Url(..) | CellValue::Rich(_) => {
+                SCRATCH.with_borrow_mut(|ws| self.write(ws, 0, 0, None))
+            }
+            _ => Ok(()),
+        }
     }
 
     fn write(
@@ -831,25 +859,23 @@ impl Worksheet {
         // and a value that fails to convert leaves the row unwritten.
         let mut values = Vec::with_capacity(cells.len());
         each_entry(cells, |i, v| {
-            let col = u16::try_from(i)
-                .map_err(|_| Error::new(ruby.exception_arg_error(), "too many columns"))?;
+            if i >= MAX_COLS {
+                return Err(Error::new(
+                    ruby.exception_arg_error(),
+                    format!("too many columns: Excel allows {MAX_COLS}"),
+                ));
+            }
+            let col = i as u16;
             values.push((col, CellValue::from_ruby(ruby, v)?, format.at(i)?));
             Ok(())
         })?;
         let tables = self.table_formats.borrow();
         self.with_ws(|ws| {
-            for (i, (col, value, format)) in values.iter().enumerate() {
+            // Values were checked when converted, so only a bad row number
+            // fails here, and it fails on the first cell.
+            for (col, value, format) in &values {
                 let format = Self::cell_format(&tables, row, *col, format.as_deref());
-                if let Err(e) = value.write(ws, row, *col, format) {
-                    // Some values fail only here (too long, a bad URL): take
-                    // back the cells already written so the row stays empty.
-                    // ponytail: cells that held a value before are cleared, not
-                    // restored; snapshot them if overwriting rows matters.
-                    for (col, _, _) in &values[..i] {
-                        ws.clear_cell(row, *col);
-                    }
-                    return Err(e);
-                }
+                value.write(ws, row, *col, format)?;
             }
             Ok(())
         })?;
@@ -1016,20 +1042,17 @@ impl Worksheet {
         let format = Self::cell_format(&tables, first_row, first_col, format.map(|f| &*f.0));
         let default = rust_xlsxwriter::Format::new();
         rb_self.with_ws(|ws| {
-            // Write the value first: if it is rejected, nothing is merged.
-            value.write(ws, first_row, first_col, format)?;
-            if let Err(e) = ws.merge_range(
+            // The value was checked when converted, so once the range is
+            // merged, writing it cannot fail.
+            ws.merge_range(
                 first_row,
                 first_col,
                 last_row,
                 last_col,
                 "",
                 format.unwrap_or(&default),
-            ) {
-                ws.clear_cell(first_row, first_col);
-                return Err(xerr(e));
-            }
-            // merge_range overwrote the first cell with "".
+            )
+            .map_err(xerr)?;
             value.write(ws, first_row, first_col, format)
         })?;
         rb_self.advance(last_row);

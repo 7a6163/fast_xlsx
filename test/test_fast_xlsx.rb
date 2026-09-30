@@ -915,6 +915,44 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  def test_a_row_with_more_columns_than_excel_allows_leaves_no_cells
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_raises(ArgumentError) { ws << Array.new(16_385, 1) }
+    ws << ["z"]
+
+    assert_equal [["z"]], rows(wb)
+  end
+
+  def test_a_row_that_fails_to_write_leaves_no_hyperlink
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_raises(FastXlsx::Error) { ws << [FastXlsx::URL.new("https://example.com"), "x" * 40_000] }
+
+    refute_match(/hyperlink/, sheet_xml(wb))
+  end
+
+  def test_an_invalid_merge_range_keeps_the_cell_already_there
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "keep")
+    assert_raises(FastXlsx::Error) { ws.merge_range(0, 0, 0, 0, "x") }
+
+    assert_equal [["keep"]], rows(wb)
+  end
+
+  # A merge that fails must not push earlier rows to disk behind the
+  # flushed-row check, or later writes to them would be dropped silently.
+  def test_an_invalid_merge_range_does_not_flush_earlier_rows
+    wb = FastXlsx::Workbook.new(memory: :constant)
+    ws = wb.add_worksheet
+    ws.write(0, 0, "a")
+    assert_raises(FastXlsx::Error) { ws.merge_range(5, 0, 4, 0, "x") }
+    ws.write(0, 1, "b")
+
+    assert_equal [%w[a b]], rows(wb)
+  end
+
   def test_merge_range_with_a_bad_value_leaves_no_merge
     %i[standard constant].each do |memory|
       wb = FastXlsx::Workbook.new(memory: memory)

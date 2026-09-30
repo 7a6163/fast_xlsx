@@ -2,8 +2,8 @@
 
 ### Fixed
 
-- A row whose value is rejected while writing (a string over 32,767 characters, invalid UTF-8, a URL over 2,083 characters) no longer leaves its earlier cells behind.
-- `merge_range` with a rejected value no longer leaves the range merged; the value also takes its table column's format.
+- Values Excel cannot hold (a string over 32,767 characters, invalid UTF-8, a bad or over-long URL, more than 16,384 columns) raise before anything is written, instead of leaving the row half written.
+- `merge_range` with such a value no longer leaves the range merged; its value also takes its table column's format.
 - An unnamed worksheet takes the first free `SheetN` instead of a name that clashes with one given earlier (which failed only when saving).
 - Cell values and formats are copied out of Ruby objects when a row is converted, so Ruby code run while converting (a `to_s`) cannot change or free them before they are written.
 - Ruby code run while converting a value (a `to_s`, `jd`, ...) that touches the same workbook, or another thread writing to it, no longer deadlocks. A value that fails to convert leaves its row unwritten.
