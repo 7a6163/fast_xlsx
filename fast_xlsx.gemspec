@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description = "Writes Excel .xlsx files from Ruby through a native Rust extension (rust_xlsxwriter + magnus)."
   spec.homepage = "https://github.com/7a6163/fast_xlsx"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 3.3.0"
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
