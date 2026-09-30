@@ -276,6 +276,15 @@ cargo llvm-cov report --release                     # or --lcov / --html
 
 Rebuild in a clean shell afterwards (`rm -rf tmp && bundle exec rake compile`) so the everyday build is not instrumented.
 
+Mutation tests ([cargo-mutants](https://mutants.rs)) change the Rust source one small edit at a time and check that a Ruby test fails for each change. `ext/fast_xlsx/tests/ruby_suite.rs` is what connects the two: it rebuilds the extension and runs the Ruby suite, so `cargo test` covers the Ruby tests too.
+
+```bash
+cargo install cargo-mutants
+cargo mutants --file ext/fast_xlsx/src/lib.rs --jobs 4   # ~7 minutes; results in mutants.out/
+```
+
+Mutants listed in `mutants.out/missed.txt` point at behaviour no test checks. The `Mutation tests` workflow runs this weekly and on demand.
+
 ### Releasing
 
 First generate the showcase workbook and open it in Excel to check every feature renders (the test suite only inspects the XML):

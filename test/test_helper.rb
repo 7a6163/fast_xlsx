@@ -7,6 +7,7 @@ require "minitest/autorun"
 require "roo"
 require "stringio"
 require "tempfile"
+require "zlib"
 
 # Reads generated workbooks back with roo so tests assert on cell values, not XML.
 module XlsxHelpers
@@ -91,6 +92,16 @@ module XlsxHelpers
   # A 1x1 PNG with no DPI chunk, so Excel treats it as 96 DPI (9525 EMU per pixel).
   PNG_1X1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk" \
             "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==".unpack1("m")
+
+  # A width x height RGB PNG with no DPI chunk (96 DPI). Sizes other than 1x1
+  # make scaling mistakes visible (x / 1 == x * 1).
+  def self.png(width, height)
+    rows = Array.new(height) { "\0".b + ("\x80\x80\x80".b * width) }.join
+    chunk = ->(type, data) { [data.bytesize].pack("N") + type + data + [Zlib.crc32(type + data)].pack("N") }
+    "\x89PNG\r\n\x1A\n".b + chunk.call("IHDR", [width, height, 8, 2, 0, 0, 0].pack("NNC5")) +
+      chunk.call("IDAT", Zlib::Deflate.deflate(rows)) + chunk.call("IEND", "".b)
+  end
+  PNG_4X2 = png(4, 2)
 
   # Images on sheet 1: anchor cell, offsets and size in EMU, alt text, plus the media file count.
   def images(workbook)

@@ -1,0 +1,36 @@
+name: Mutation tests
+
+# cargo-mutants mutates ext/fast_xlsx/src/lib.rs and runs the Ruby suite
+# (through ext/fast_xlsx/tests/ruby_suite.rs) against each mutant. It takes
+# several minutes, so it runs weekly and on demand rather than on every push.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  mutants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Ruby & Rust
+        uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+        with:
+          ruby-version: '4.0.5'
+          bundler-cache: true
+          cargo-cache: true
+          rubygems: '4.0.10'
+      - uses: taiki-e/install-action@cargo-mutants
+      - name: Run cargo-mutants
+        run: cargo mutants --file ext/fast_xlsx/src/lib.rs --jobs 2
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutants.out
+          path: mutants.out

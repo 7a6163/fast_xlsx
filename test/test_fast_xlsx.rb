@@ -48,6 +48,14 @@ class TestFastXlsx < Minitest::Test
     assert_equal [[36_526.5]], rows(wb)
   end
 
+  def test_time_uses_its_own_wall_clock_time
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [Time.new(2000, 1, 1, 18, 0, 0, "+08:00"), Time.new(2000, 1, 1, 6, 0, 0, "-05:00")]
+
+    # 18:00 and 06:00 local, whatever their offsets from UTC.
+    assert_equal [[36_526.75, 36_526.25]], rows(wb)
+  end
+
   def test_date_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Date.new(2000, 1, 1)]
@@ -420,6 +428,20 @@ class TestFastXlsx < Minitest::Test
                  conditional_formats(wb).first.values_at(:type, :operator, :text)
   end
 
+  def test_conditional_format_other_text_criteria
+    {
+      not_contains: %w[notContainsText notContains],
+      begins_with: %w[beginsWith beginsWith],
+      ends_with: %w[endsWith endsWith]
+    }.each do |criteria, (type, operator)|
+      wb = FastXlsx::Workbook.new
+      wb.add_worksheet.conditional_format(0, 0, 9, 0, type: :text, criteria: criteria, value: "x",
+                                                      format: FastXlsx::Format.new(bold: true))
+
+      assert_equal [type, operator, "x"], conditional_formats(wb).first.values_at(:type, :operator, :text), criteria
+    end
+  end
+
   def test_conditional_format_formula
     wb = FastXlsx::Workbook.new
     wb.add_worksheet.conditional_format(0, 0, 9, 3, type: :formula, value: "=$D1>100",
@@ -531,11 +553,12 @@ class TestFastXlsx < Minitest::Test
   def test_insert_image_with_pixel_width_and_height
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    ws.insert_image(0, 0, StringIO.new(PNG_1X1), width: 40, height: 20)
-    ws.insert_image(5, 0, StringIO.new(PNG_1X1), width: 30) # keeps the aspect ratio
+    ws.insert_image(0, 0, StringIO.new(PNG_4X2), width: 40, height: 30)
+    ws.insert_image(5, 0, StringIO.new(PNG_4X2), width: 20) # keeps the 2:1 aspect ratio
+    ws.insert_image(10, 0, StringIO.new(PNG_4X2), height: 6)
 
     sizes = images(wb).first.map { |a| [a[:cx] / 9525, a[:cy] / 9525] }
-    assert_equal [[40, 20], [30, 30]], sizes
+    assert_equal [[40, 30], [20, 10], [12, 6]], sizes
   end
 
   def test_insert_image_rejects_scale_with_width_or_height
