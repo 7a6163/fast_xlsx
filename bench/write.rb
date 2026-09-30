@@ -2,8 +2,13 @@
 
 # Usage: bundle exec rake compile && ruby -Ilib bench/write.rb
 # Compares against fast_excel when it can be loaded (FAST_EXCEL=/path/to/fast_excel/lib/fast_excel).
-require "benchmark"
 require "fast_xlsx"
+
+def elapsed
+  start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  yield
+  Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+end
 
 ROWS = 20_000
 DATA = Array.new(ROWS) do |n|
@@ -13,7 +18,7 @@ end
 def report(label, runs = 7, &block)
   times = Array.new(runs) do
     GC.start
-    Benchmark.realtime(&block)
+    elapsed(&block)
   end
   puts "  #{label.ljust(26)} #{(times.sort[runs / 2] * 1000).round(1)} ms"
 end

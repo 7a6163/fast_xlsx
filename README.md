@@ -75,15 +75,28 @@ Errors from the writer (invalid sheet names, out-of-order rows in constant memor
 
 ## Performance
 
-20,000 rows × 5 columns (integer, string, integer, `Time`, float), write + serialize, median of 7, Apple Silicon, Ruby 4.0:
+20,000 rows × 5 columns (integer, string, integer, `Time`, float), build + serialize to a String, median of 7 runs (3 for rubyXL), Apple Silicon, Ruby 4.0.5:
 
-| | default | constant_memory |
-|---|---|---|
-| fast_xlsx `<<` | 103 ms | 94 ms |
-| fast_xlsx `concat` | 101 ms | 91 ms |
-| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 `<<` | 241 ms | 199 ms |
+| Library | Time | vs fast_xlsx | Ruby objects allocated |
+|---|---:|---:|---:|
+| **fast_xlsx** (constant_memory) | **93 ms** | 1.0x | 20,006 |
+| **fast_xlsx** | **102 ms** | 1.1x | 20,009 |
+| [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 184 ms | 2.0x | 561,740 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 203 ms | 2.2x | 20,079 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 | 244 ms | 2.6x | 320,076 |
+| [write_xlsx](https://github.com/cxn03651/write_xlsx) 1.15 | 594 ms | 6.4x | 1,483,899 |
+| [caxlsx](https://github.com/caxlsx/caxlsx) 4.5 | 701 ms | 7.6x | 745,122 |
+| [rubyXL](https://github.com/weshatheleopard/rubyXL) 3.4 | 2636 ms | 28.5x | 8,700,448 |
 
-Reproduce with `bench/write.rb`.
+All outputs are 705–750 KB. Each library uses its own idiomatic row-append API; xlsxtream is a streaming writer with fewer features.
+
+Reproduce:
+
+```bash
+bundle exec rake compile
+BUNDLE_GEMFILE=bench/Gemfile bundle install
+BUNDLE_GEMFILE=bench/Gemfile bundle exec ruby bench/compare.rb   # optional row count argument
+```
 
 ## Installation
 

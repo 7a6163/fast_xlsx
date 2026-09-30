@@ -1,0 +1,14 @@
+# frozen_string_literal: true
+
+# Libraries compared in bench/compare.rb. Kept out of the main Gemfile so CI
+# does not install them. Usage: BUNDLE_GEMFILE=bench/Gemfile bundle exec ruby bench/compare.rb
+
+source "https://rubygems.org"
+
+gem "fast_xlsx", path: ".."
+
+gem "caxlsx"
+gem "fast_excel"
+gem "rubyXL"
+gem "write_xlsx"
+gem "xlsxtream"
