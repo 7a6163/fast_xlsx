@@ -70,10 +70,46 @@ jobs:
           name: gem-${{ matrix.platform }}
           path: ${{ steps.cross-gem.outputs.gem-path }}
 
+  # Install the built platform gems the way users do and load them, so a gem
+  # that cannot be required is never published.
+  smoke-test:
+    name: Install ${{ matrix.target.platform }} gem on Ruby ${{ matrix.ruby }}
+    needs: cross-gem
+    runs-on: ${{ matrix.target.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { os: ubuntu-latest, platform: x86_64-linux }
+          - { os: macos-latest, platform: arm64-darwin }
+          - { os: windows-latest, platform: x64-mingw-ucrt }
+        ruby: ["3.3", "3.4", "4.0"]
+    steps:
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: gem-${{ matrix.target.platform }}
+          path: pkg
+
+      - name: Install and use the gem
+        shell: bash
+        run: |
+          gem install pkg/*.gem --no-document
+          ruby -e '
+            require "fast_xlsx"
+            wb = FastXlsx::Workbook.new(memory: :constant)
+            wb.add_worksheet << ["hello", 42, Time.now]
+            abort "not an xlsx" unless wb.to_xlsx.start_with?("PK")
+            puts "fast_xlsx #{FastXlsx::VERSION} OK on #{RUBY_PLATFORM}, Ruby #{RUBY_VERSION}"
+          '
+
   publish:
     name: Publish to RubyGems and GitHub Packages
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [source-gem, cross-gem]
+    needs: [source-gem, cross-gem, smoke-test]
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -105,18 +141,18 @@ jobs:
 
       - run: ls -l pkg
 
+      # GitHub Packages goes first, with only its own token. gem push prefers
+      # GEM_HOST_API_KEY over --key, so once the RubyGems credentials below are
+      # configured they would be sent to whichever host is pushed to.
+      - name: Push to GitHub Packages
+        env:
+          GEM_HOST_API_KEY: Bearer ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for gem in pkg/*.gem; do
+            gem push --host "https://rubygems.pkg.github.com/${GITHUB_REPOSITORY_OWNER}" "$gem"
+          done
+
       - uses: rubygems/configure-rubygems-credentials@v2.1.0
 
       - name: Push to RubyGems
         run: for gem in pkg/*.gem; do gem push "$gem"; done
-
-      - name: Push to GitHub Packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p ~/.gem
-          printf -- "---\n:github: Bearer %s\n" "$GITHUB_TOKEN" > ~/.gem/credentials
-          chmod 0600 ~/.gem/credentials
-          for gem in pkg/*.gem; do
-            gem push --key github --host "https://rubygems.pkg.github.com/${GITHUB_REPOSITORY_OWNER}" "$gem"
-          done
