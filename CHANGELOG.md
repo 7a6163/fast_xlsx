@@ -4,3 +4,4 @@
 - `constant_memory` mode
 - Numeric, String, Time, Date/DateTime, boolean and nil cell values
 - `FastXlsx::Formula` cell values
+- `FastXlsx::URL` hyperlink cell values

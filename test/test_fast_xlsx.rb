@@ -69,6 +69,15 @@ class TestFastXlsx < Minitest::Test
     assert_equal "SUM(A1:B1)", open_xlsx(wb).formula(1, 3)
   end
 
+  def test_url_is_written_as_hyperlink
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [FastXlsx::URL.new("https://example.com/a")]
+
+    xlsx = open_xlsx(wb)
+    assert_equal "https://example.com/a", xlsx.hyperlink(1, 1)
+    assert_equal "https://example.com/a", xlsx.cell(1, 1)
+  end
+
   def test_append_continues_after_last_written_row
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

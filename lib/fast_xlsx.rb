@@ -13,6 +13,13 @@ module FastXlsx
     end
   end
 
+  # Cell value written as a hyperlink, e.g. URL.new("https://example.com").
+  URL = Data.define(:url) do
+    def initialize(url:)
+      super(url: url.to_s)
+    end
+  end
+
   # The native extension looks up FastXlsx::Error, so load it after Error is defined.
   require "fast_xlsx/fast_xlsx"
 

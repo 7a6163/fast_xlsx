@@ -17,6 +17,7 @@ fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
 
 static ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Error"));
 static FORMULA: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Formula"));
+static URL: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "URL"));
 
 fn xerr(e: XlsxError) -> Error {
     let ruby = Ruby::get().unwrap();
@@ -109,6 +110,9 @@ fn put(
     } else if v.is_kind_of(ruby.get_inner(&FORMULA)) {
         let expression: String = v.funcall("expression", ())?;
         ws.write_formula(row, col, expression.as_str())
+    } else if v.is_kind_of(ruby.get_inner(&URL)) {
+        let url: String = v.funcall("url", ())?;
+        ws.write_url(row, col, url.as_str())
     } else if v.respond_to("jd", false)? {
         ws.write_number(row, col, excel_date(v)?)
     } else {
