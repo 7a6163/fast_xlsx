@@ -45,7 +45,13 @@ module FastXlsx
   end
 
   # The native extension looks up FastXlsx::Error, so load it after Error is defined.
-  require "fast_xlsx/fast_xlsx"
+  # Precompiled gems ship one binary per Ruby version (fast_xlsx/3.4/fast_xlsx);
+  # a gem compiled on install has a single fast_xlsx/fast_xlsx.
+  begin
+    require "fast_xlsx/#{RUBY_VERSION[/\d+\.\d+/]}/fast_xlsx"
+  rescue LoadError
+    require "fast_xlsx/fast_xlsx"
+  end
 
   # Owns the worksheets; serialize with #to_xlsx or #save.
   class Workbook

@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "date"
+require "fileutils"
 require "tmpdir"
 
 class TestFastXlsx < Minitest::Test
@@ -887,6 +888,27 @@ class TestFastXlsx < Minitest::Test
 
       assert_equal %w[Values Formats Layout Conditional Validation Table Chart Media Printing],
                    Roo::Excelx.new(path).sheets
+    end
+  end
+
+  # Precompiled (platform) gems ship one binary per Ruby version under
+  # lib/fast_xlsx/<major.minor>/, not lib/fast_xlsx/fast_xlsx.bundle.
+  def test_loads_the_extension_from_a_precompiled_gem_layout
+    lib = File.expand_path("../lib", __dir__)
+    binary = Dir[File.join(lib, "fast_xlsx", "fast_xlsx.{bundle,so,dll}")].first
+    skip "compile the extension first" unless binary
+
+    Dir.mktmpdir do |dir|
+      FileUtils.cp_r(Dir[File.join(lib, "*")], dir)
+      ruby_dir = File.join(dir, "fast_xlsx", RUBY_VERSION[/\d+\.\d+/])
+      FileUtils.mkdir_p(ruby_dir)
+      FileUtils.mv(File.join(dir, "fast_xlsx", File.basename(binary)), ruby_dir)
+
+      script = 'require "fast_xlsx"; print FastXlsx::Workbook.new.tap { |w| w.add_worksheet << [1] }.to_xlsx[0, 2]'
+      # Only `dir` may be visible: no Bundler/RubyGems paths back to the repo's lib.
+      env = { "RUBYOPT" => nil, "RUBYLIB" => nil }
+      output = IO.popen([env, RbConfig.ruby, "--disable-gems", "-I", dir, "-e", script], err: File::NULL, &:read)
+      assert_equal "PK", output
     end
   end
 
