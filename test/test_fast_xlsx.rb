@@ -183,6 +183,28 @@ class TestFastXlsx < Minitest::Test
     assert_includes error.message, "#12345"
   end
 
+  def test_horizontal_and_vertical_alignment
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "x", FastXlsx::Format.new(align: :center, valign: :top))
+    ws.write(0, 1, "y", FastXlsx::Format.new(align: :right, valign: :center))
+
+    assert_equal %w[center top], cell_style(wb, "A1").values_at(:align, :valign)
+    assert_equal %w[right center], cell_style(wb, "B1").values_at(:align, :valign)
+  end
+
+  def test_invalid_alignment_raises
+    error = assert_raises(ArgumentError) { FastXlsx::Format.new(align: :middle) }
+    assert_includes error.message, "middle"
+  end
+
+  def test_text_wrap
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "a\nb", FastXlsx::Format.new(text_wrap: true))
+
+    assert cell_style(wb, "A1")[:text_wrap]
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

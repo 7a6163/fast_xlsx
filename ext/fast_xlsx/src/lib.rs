@@ -6,7 +6,7 @@ use magnus::{
     ExceptionClass, Integer, RArray, RClass, RHash, RModule, RString, Ruby, Symbol, TryConvert,
     Value,
 };
-use rust_xlsxwriter::{Color, FormatUnderline, IntoExcelData, XlsxError};
+use rust_xlsxwriter::{Color, FormatAlign, FormatUnderline, IntoExcelData, XlsxError};
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
@@ -174,6 +174,29 @@ fn color(ruby: &Ruby, value: Value) -> Result<Color, Error> {
     })
 }
 
+// A symbol option that must be one of `choices`.
+fn choice<T: Clone>(
+    ruby: &Ruby,
+    option: &str,
+    value: Value,
+    choices: &[(&str, T)],
+) -> Result<T, Error> {
+    let name = Symbol::from_value(value).and_then(|s| s.name().ok());
+    name.and_then(|n| choices.iter().find(|(k, _)| *k == n))
+        .map(|(_, v)| v.clone())
+        .ok_or_else(|| {
+            let names: Vec<_> = choices.iter().map(|(k, _)| format!(":{k}")).collect();
+            Error::new(
+                ruby.exception_arg_error(),
+                format!(
+                    "invalid {option} {}: expected one of {}",
+                    value.inspect(),
+                    names.join(", ")
+                ),
+            )
+        })
+}
+
 #[magnus::wrap(class = "FastXlsx::Format", free_immediately)]
 struct Format(rust_xlsxwriter::Format);
 
@@ -191,7 +214,28 @@ impl Format {
                 "font_name" => taken.set_font_name(String::try_convert(value)?),
                 "font_color" => taken.set_font_color(color(ruby, value)?),
                 "bg_color" => taken.set_background_color(color(ruby, value)?),
-                "bold" | "italic" | "underline" => taken,
+                "align" => taken.set_align(choice(
+                    ruby,
+                    "align",
+                    value,
+                    &[
+                        ("left", FormatAlign::Left),
+                        ("center", FormatAlign::Center),
+                        ("right", FormatAlign::Right),
+                    ],
+                )?),
+                "valign" => taken.set_align(choice(
+                    ruby,
+                    "valign",
+                    value,
+                    &[
+                        ("top", FormatAlign::Top),
+                        ("center", FormatAlign::VerticalCenter),
+                        ("bottom", FormatAlign::Bottom),
+                    ],
+                )?),
+                "text_wrap" if value.to_bool() => taken.set_text_wrap(),
+                "bold" | "italic" | "underline" | "text_wrap" => taken,
                 other => {
                     return Err(Error::new(
                         ruby.exception_arg_error(),
