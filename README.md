@@ -2,7 +2,7 @@
 
 Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
-> **Status: early.** Formats, column widths and charts are not implemented yet.
+> **Status: early.** Formats support bold / italic / underline / number formats only; column widths, colors, alignment, borders and charts are not implemented yet.
 
 ## Usage
 
@@ -18,6 +18,18 @@ ws.write(0, 5, 42)                                # write a single cell (row, co
 
 wb.save("report.xlsx")                            # or wb.to_xlsx => binary String
 ```
+
+### Formats
+
+```ruby
+header = FastXlsx::Format.new(bold: true, underline: true)
+date   = FastXlsx::Format.new(num_format: "yyyy-mm-dd")
+
+ws.append(["id", "name", "created_at"], format: header)  # format every cell in the row
+ws.write(1, 2, Date.today, date)                         # format one cell
+```
+
+Options: `bold`, `italic`, `underline` (booleans) and `num_format` (Excel number format string). Unknown options raise `ArgumentError`.
 
 Values are mapped by type:
 

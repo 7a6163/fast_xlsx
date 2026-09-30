@@ -35,4 +35,22 @@ module FastXlsx
       _add_worksheet(name)
     end
   end
+
+  # Cell writer for one sheet; create with Workbook#add_worksheet.
+  class Worksheet
+    def write(row, col, value, format = nil)
+      _write(row, col, value, format)
+    end
+
+    def append(values, format: nil)
+      _append(values, format)
+    end
+  end
+
+  # Cell style, e.g. Format.new(bold: true). Pass to Worksheet#write.
+  class Format
+    def self.new(**options)
+      _new(options)
+    end
+  end
 end

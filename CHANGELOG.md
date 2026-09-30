@@ -5,3 +5,4 @@
 - Numeric, String, Time, Date/DateTime, boolean and nil cell values
 - `FastXlsx::Formula` cell values
 - `FastXlsx::URL` hyperlink cell values
+- `FastXlsx::Format` (bold, italic, underline, num_format) for `Worksheet#write` and `Worksheet#append`

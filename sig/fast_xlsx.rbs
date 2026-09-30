@@ -23,8 +23,13 @@ module FastXlsx
     def save: (String path) -> void
   end
 
+  class Format
+    def self.new: (?bold: bool, ?italic: bool, ?underline: bool, ?num_format: String) -> Format
+  end
+
   class Worksheet
-    def write: (Integer row, Integer col, cell value) -> void
+    def write: (Integer row, Integer col, cell value, ?Format? format) -> void
+    def append: (Array[cell] values, ?format: Format?) -> self
     def <<: (Array[cell] row) -> self
     def concat: (Array[Array[cell]] rows) -> self
     def next_row: () -> Integer

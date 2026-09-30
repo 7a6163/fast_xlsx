@@ -78,6 +78,57 @@ class TestFastXlsx < Minitest::Test
     assert_equal "https://example.com/a", xlsx.cell(1, 1)
   end
 
+  def test_write_applies_bold_format
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "bold", FastXlsx::Format.new(bold: true))
+    ws.write(0, 1, "plain")
+
+    xlsx = open_xlsx(wb)
+    assert_predicate xlsx.font(1, 1), :bold?
+    refute_predicate xlsx.font(1, 2), :bold?
+  end
+
+  def test_write_applies_italic_format
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(italic: true))
+
+    assert_predicate open_xlsx(wb).font(1, 1), :italic?
+  end
+
+  def test_write_applies_underline_format
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(underline: true))
+
+    assert_predicate open_xlsx(wb).font(1, 1), :underline?
+  end
+
+  def test_num_format_turns_serial_number_into_a_date
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, Date.new(2024, 2, 29), FastXlsx::Format.new(num_format: "yyyy-mm-dd"))
+
+    xlsx = open_xlsx(wb)
+    assert_equal "yyyy-mm-dd", xlsx.excelx_format(1, 1)
+    assert_equal Date.new(2024, 2, 29), xlsx.cell(1, 1)
+  end
+
+  def test_append_applies_format_to_every_cell_and_advances
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.append(%w[id name], format: FastXlsx::Format.new(bold: true))
+    ws << [1, "a"]
+
+    xlsx = open_xlsx(wb)
+    assert_equal [%w[id name], [1, "a"]], rows(wb)
+    assert(xlsx.font(1, 1).bold? && xlsx.font(1, 2).bold?)
+    refute_predicate xlsx.font(2, 1), :bold?
+  end
+
+  def test_unknown_format_option_raises
+    error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
+    assert_includes error.message, "bolt"
+  end
+
   def test_append_continues_after_last_written_row
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
