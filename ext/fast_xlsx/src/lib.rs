@@ -889,6 +889,7 @@ impl Worksheet {
         v: Value,
         format: Option<&Format>,
     ) -> Result<Obj<Self>, Error> {
+        rb_self.check_not_flushed(ruby, first_row)?;
         let default = rust_xlsxwriter::Format::new();
         let merge_format = format.map_or(&default, |f| &f.0);
         let value = CellValue::from_ruby(ruby, v)?;

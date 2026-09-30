@@ -901,6 +901,14 @@ class TestFastXlsx < Minitest::Test
     assert_equal [999, "row 999"], written.last
   end
 
+  def test_merge_range_over_flushed_rows_raises
+    %i[constant low].each do |memory|
+      ws = FastXlsx::Workbook.new(memory: memory).add_worksheet
+      ws << ["a"] << ["b"] << ["c"]
+      assert_raises(FastXlsx::Error, "memory: #{memory}") { ws.merge_range(0, 0, 0, 2, "Title") }
+    end
+  end
+
   def test_constant_memory_rejects_writes_to_flushed_rows
     wb = FastXlsx::Workbook.new(memory: :constant)
     ws = wb.add_worksheet
