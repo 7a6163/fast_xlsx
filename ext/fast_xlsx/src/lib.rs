@@ -182,6 +182,14 @@ impl Worksheet {
         self.next_row.set(self.next_row.get().max(row + 1));
     }
 
+    fn with_ws<T>(
+        &self,
+        f: impl FnOnce(&mut rust_xlsxwriter::Worksheet) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let mut wb = self.wb.lock().unwrap();
+        f(wb.worksheet_from_index(self.index).map_err(xerr)?)
+    }
+
     fn write_row(
         &self,
         ruby: &Ruby,
@@ -189,13 +197,14 @@ impl Worksheet {
         cells: RArray,
         format: Option<&Format>,
     ) -> Result<(), Error> {
-        let mut wb = self.wb.lock().unwrap();
-        let ws = wb.worksheet_from_index(self.index).map_err(xerr)?;
-        for (col, v) in cells.into_iter().enumerate() {
-            let col = u16::try_from(col)
-                .map_err(|_| Error::new(ruby.exception_arg_error(), "too many columns"))?;
-            put(ruby, ws, row, col, v, format)?;
-        }
+        self.with_ws(|ws| {
+            for (col, v) in cells.into_iter().enumerate() {
+                let col = u16::try_from(col)
+                    .map_err(|_| Error::new(ruby.exception_arg_error(), "too many columns"))?;
+                put(ruby, ws, row, col, v, format)?;
+            }
+            Ok(())
+        })?;
         self.advance(row);
         Ok(())
     }
@@ -215,9 +224,7 @@ impl Worksheet {
                 format!("row {row} was already flushed in constant_memory mode"),
             ));
         }
-        let mut wb = rb_self.wb.lock().unwrap();
-        let ws = wb.worksheet_from_index(rb_self.index).map_err(xerr)?;
-        put(ruby, ws, row, col, v, format)?;
+        rb_self.with_ws(|ws| put(ruby, ws, row, col, v, format))?;
         rb_self.advance(row);
         Ok(())
     }
@@ -243,6 +250,37 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn set_column_width(&self, first: u16, last: u16, width: f64) -> Result<(), Error> {
+        self.with_ws(|ws| {
+            ws.set_column_range_width(first, last, width)
+                .map(|_| ())
+                .map_err(xerr)
+        })
+    }
+
+    fn autofilter(
+        rb_self: Obj<Self>,
+        first_row: u32,
+        first_col: u16,
+        last_row: u32,
+        last_col: u16,
+    ) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| {
+            ws.autofilter(first_row, first_col, last_row, last_col)
+                .map(|_| ())
+                .map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
+    fn autofit(rb_self: Obj<Self>) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| {
+            ws.autofit();
+            Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
     fn next_row(&self) -> u32 {
         self.next_row.get()
     }
@@ -261,6 +299,9 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     let ws = module.define_class("Worksheet", ruby.class_object())?;
     ws.define_method("_write", method!(Worksheet::write, 4))?;
     ws.define_method("_append", method!(Worksheet::append, 2))?;
+    ws.define_method("_set_column_width", method!(Worksheet::set_column_width, 3))?;
+    ws.define_method("autofit", method!(Worksheet::autofit, 0))?;
+    ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
 
     let format = module.define_class("Format", ruby.class_object())?;
     format.define_singleton_method("_new", function!(Format::new, 1))?;

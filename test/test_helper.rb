@@ -5,6 +5,7 @@ require "fast_xlsx"
 
 require "minitest/autorun"
 require "roo"
+require "stringio"
 require "tempfile"
 
 # Reads generated workbooks back with roo so tests assert on cell values, not XML.
@@ -24,5 +25,17 @@ module XlsxHelpers
     return [] unless xlsx.last_row
 
     (1..xlsx.last_row).map { |r| (1..xlsx.last_column).map { |c| xlsx.cell(r, c) } }
+  end
+
+  # Raw worksheet XML, for settings roo does not expose (column widths, filters).
+  def sheet_xml(workbook, index = 1)
+    Zip::File.open_buffer(StringIO.new(workbook.to_xlsx)).read("xl/worksheets/sheet#{index}.xml")
+  end
+
+  # { column_number => width } from the <cols> element, 1-based like Excel.
+  def column_widths(workbook)
+    sheet_xml(workbook).scan(/<col min="(\d+)" max="(\d+)" width="([\d.]+)"/).each_with_object({}) do |(min, max, w), h|
+      (min.to_i..max.to_i).each { |c| h[c] = w.to_f }
+    end
   end
 end

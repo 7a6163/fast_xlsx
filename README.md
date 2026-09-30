@@ -2,7 +2,7 @@
 
 Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
-> **Status: early.** Formats support bold / italic / underline / number formats only; column widths, colors, alignment, borders and charts are not implemented yet.
+> **Status: early.** Formats support bold / italic / underline / number formats only; colors, alignment, borders, column formats and charts are not implemented yet.
 
 ## Usage
 
@@ -30,6 +30,17 @@ ws.write(1, 2, Date.today, date)                         # format one cell
 ```
 
 Options: `bold`, `italic`, `underline` (booleans) and `num_format` (Excel number format string). Unknown options raise `ArgumentError`.
+
+### Columns and filters
+
+```ruby
+ws.set_column_width(0, 20)        # column A, width in characters
+ws.set_column_width(1..3, 12)     # columns B–D
+ws.autofit                        # size columns to the data written so far
+ws.autofilter(0, 0, 100, 3)       # filter buttons on A1:D101 (first_row, first_col, last_row, last_col)
+```
+
+`autofit` only sees rows still in memory, so it has no effect on rows already flushed in `constant_memory` mode.
 
 Values are mapped by type:
 

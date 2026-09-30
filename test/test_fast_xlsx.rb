@@ -124,6 +124,40 @@ class TestFastXlsx < Minitest::Test
     refute_predicate xlsx.font(2, 1), :bold?
   end
 
+  def test_set_column_width_for_single_column_and_range
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.set_column_width(0, 20)
+    ws.set_column_width(2..3, 5)
+    ws << %w[a b c d]
+
+    widths = column_widths(wb)
+    assert_in_delta 20, widths[1], 1
+    assert_nil widths[2]
+    assert_in_delta 5, widths[3], 1
+    assert_in_delta 5, widths[4], 1
+  end
+
+  def test_autofit_widens_columns_to_their_content
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws << ["a much longer piece of text than the default width", "x"]
+    ws.autofit
+
+    widths = column_widths(wb)
+    assert_operator widths[1], :>, 30
+    assert_operator widths[2], :<, widths[1]
+  end
+
+  def test_autofilter_covers_the_given_range
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.concat([%w[id name score], [1, "a", 9], [2, "b", 7]])
+    ws.autofilter(0, 0, 2, 2)
+
+    assert_match(/<autoFilter ref="A1:C3"/, sheet_xml(wb))
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

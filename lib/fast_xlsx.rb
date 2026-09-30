@@ -45,6 +45,13 @@ module FastXlsx
     def append(values, format: nil)
       _append(values, format)
     end
+
+    # columns: a 0-based column index or a Range of them. width is in characters.
+    def set_column_width(columns, width)
+      columns = columns..columns if columns.is_a?(Integer)
+      _set_column_width(columns.min, columns.max, width)
+      self
+    end
   end
 
   # Cell style, e.g. Format.new(bold: true). Pass to Worksheet#write.

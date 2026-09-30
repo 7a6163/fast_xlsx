@@ -16,3 +16,8 @@ Metrics/MethodLength:
 Metrics/ClassLength:
   Exclude:
     - test/**/*
+
+# Worksheet#concat is not Array#concat.
+Style/ConcatArrayLiterals:
+  Exclude:
+    - test/**/*
