@@ -167,6 +167,23 @@ class TestFastXlsx < Minitest::Test
     assert_equal [999, "row 999"], written.last
   end
 
+  def test_constant_memory_rejects_writes_to_flushed_rows
+    wb = FastXlsx::Workbook.new(constant_memory: true)
+    ws = wb.add_worksheet
+    ws << ["a"] << ["b"]
+
+    assert_raises(FastXlsx::Error) { ws.write(0, 0, "late") }
+  end
+
+  def test_constant_memory_allows_writes_to_the_current_row
+    wb = FastXlsx::Workbook.new(constant_memory: true)
+    ws = wb.add_worksheet
+    ws << ["a"]
+    ws.write(0, 1, "b")
+
+    assert_equal [%w[a b]], rows(wb)
+  end
+
   def test_invalid_sheet_name_raises
     wb = FastXlsx::Workbook.new
     assert_raises(FastXlsx::Error) { wb.add_worksheet("bad[name]") }

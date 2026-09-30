@@ -37,6 +37,7 @@ struct Worksheet {
     wb: Shared,
     index: usize,
     next_row: Cell<u32>,
+    constant_memory: bool,
 }
 
 impl Workbook {
@@ -61,6 +62,7 @@ impl Workbook {
             wb: self.inner.clone(),
             index: wb.worksheets().len() - 1,
             next_row: Cell::new(0),
+            constant_memory: self.constant_memory,
         })
     }
 
@@ -206,6 +208,13 @@ impl Worksheet {
         v: Value,
         format: Option<&Format>,
     ) -> Result<(), Error> {
+        // rust_xlsxwriter silently drops writes to rows it has already flushed.
+        if rb_self.constant_memory && row + 1 < rb_self.next_row.get() {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                format!("row {row} was already flushed in constant_memory mode"),
+            ));
+        }
         let mut wb = rb_self.wb.lock().unwrap();
         let ws = wb.worksheet_from_index(rb_self.index).map_err(xerr)?;
         put(ruby, ws, row, col, v, format)?;
