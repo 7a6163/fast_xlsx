@@ -231,6 +231,16 @@ class TestFastXlsx < Minitest::Test
     assert_includes error.message, "bold"
   end
 
+  def test_append_accepts_one_format_per_cell
+    wb = FastXlsx::Workbook.new
+    bold = FastXlsx::Format.new(bold: true)
+    wb.add_worksheet.append(["a", 1, "c"], format: [bold, nil])
+
+    xlsx = open_xlsx(wb)
+    assert_equal([true, false, false], (1..3).map { |c| xlsx.font(1, c).bold? })
+    assert_equal [["a", 1, "c"]], rows(wb)
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

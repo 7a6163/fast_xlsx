@@ -28,6 +28,7 @@ header = FastXlsx::Format.new(bold: true, bg_color: "#DDEBF7", border_bottom: :t
 date   = FastXlsx::Format.new(num_format: "yyyy-mm-dd")
 
 ws.append(["id", "name", "created_at"], format: header)  # format every cell in the row
+ws.append([1, "a", Time.now], format: [nil, nil, date]) # or one format (or nil) per cell
 ws.write(1, 2, Date.today, date)                         # format one cell
 ```
 

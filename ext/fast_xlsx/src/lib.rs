@@ -266,6 +266,30 @@ impl Format {
     }
 }
 
+// A row's format: one Format (or nil) for every cell, or an Array with one per cell.
+enum RowFormat {
+    Same(Option<&'static Format>),
+    PerCell(RArray),
+}
+
+impl RowFormat {
+    fn from_value(v: Value) -> Result<Self, Error> {
+        match RArray::from_value(v) {
+            Some(formats) => Ok(RowFormat::PerCell(formats)),
+            None => Ok(RowFormat::Same(Option::<&Format>::try_convert(v)?)),
+        }
+    }
+
+    fn at(&self, col: usize) -> Result<Option<&Format>, Error> {
+        match self {
+            RowFormat::Same(f) => Ok(*f),
+            RowFormat::PerCell(formats) => {
+                Option::<&Format>::try_convert(formats.entry::<Value>(col as isize)?)
+            }
+        }
+    }
+}
+
 impl Worksheet {
     fn advance(&self, row: u32) {
         self.next_row.set(self.next_row.get().max(row + 1));
@@ -284,13 +308,13 @@ impl Worksheet {
         ruby: &Ruby,
         row: u32,
         cells: RArray,
-        format: Option<&Format>,
+        format: &RowFormat,
     ) -> Result<(), Error> {
         self.with_ws(|ws| {
-            for (col, v) in cells.into_iter().enumerate() {
-                let col = u16::try_from(col)
+            for (i, v) in cells.into_iter().enumerate() {
+                let col = u16::try_from(i)
                     .map_err(|_| Error::new(ruby.exception_arg_error(), "too many columns"))?;
-                put(ruby, ws, row, col, v, format)?;
+                put(ruby, ws, row, col, v, format.at(i)?)?;
             }
             Ok(())
         })?;
@@ -322,19 +346,22 @@ impl Worksheet {
         ruby: &Ruby,
         rb_self: Obj<Self>,
         cells: RArray,
-        format: Option<&Format>,
+        format: Value,
     ) -> Result<Obj<Self>, Error> {
-        rb_self.write_row(ruby, rb_self.next_row.get(), cells, format)?;
+        let format = RowFormat::from_value(format)?;
+        rb_self.write_row(ruby, rb_self.next_row.get(), cells, &format)?;
         Ok(rb_self)
     }
 
     fn push(ruby: &Ruby, rb_self: Obj<Self>, cells: RArray) -> Result<Obj<Self>, Error> {
-        Self::append(ruby, rb_self, cells, None)
+        rb_self.write_row(ruby, rb_self.next_row.get(), cells, &RowFormat::Same(None))?;
+        Ok(rb_self)
     }
 
     fn concat(ruby: &Ruby, rb_self: Obj<Self>, rows: RArray) -> Result<Obj<Self>, Error> {
         for r in rows.into_iter() {
-            rb_self.write_row(ruby, rb_self.next_row.get(), RArray::try_convert(r)?, None)?;
+            let cells = RArray::try_convert(r)?;
+            rb_self.write_row(ruby, rb_self.next_row.get(), cells, &RowFormat::Same(None))?;
         }
         Ok(rb_self)
     }
