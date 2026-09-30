@@ -11,7 +11,7 @@ Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcn
 ```ruby
 require "fast_xlsx"
 
-wb = FastXlsx::Workbook.new                       # or Workbook.new(constant_memory: true)
+wb = FastXlsx::Workbook.new                       # or constant_memory: true / low_memory: true, see below
 ws = wb.add_worksheet("Report")                  # later: wb.worksheet("Report"), wb.worksheets
 
 ws << ["id", "name", "created_at"]                # append a row
@@ -21,6 +21,33 @@ ws.write(0, 5, 42)                                # write a single cell (row, co
 wb.set_properties(title: "Q3 report", author: "Zac", keywords: "Confidential") # File > Info in Excel
 wb.save("report.xlsx")                            # or wb.to_xlsx => binary String
 ```
+
+### Memory modes
+
+By default every cell stays in memory until the file is saved. For large exports, two modes write each finished row to a temp file instead:
+
+```ruby
+FastXlsx::Workbook.new                          # default: everything in memory, any write order
+FastXlsx::Workbook.new(constant_memory: true)   # rows on disk, strings stored inline in each cell
+FastXlsx::Workbook.new(low_memory: true)        # rows on disk, strings in Excel's shared string table
+```
+
+| | default | `constant_memory` | `low_memory` |
+|---|---|---|---|
+| Finished rows | kept in memory | written to disk | written to disk |
+| Memory grows with | all cells | nothing (flat) | the number of unique strings |
+| Write order | any | top to bottom only | top to bottom only |
+| `autofit` | full | only sees rows still in memory | only sees rows still in memory |
+| Strings | shared string table | inline in each cell | shared string table |
+| Output | standard | some readers (e.g. xsv) don't support inline strings | standard |
+
+Which one:
+
+- **default** for normal reports, when you need to go back and change earlier rows, or rely on `autofit`.
+- **`constant_memory`** for large exports written row by row: memory stays flat whatever the data, and it is the fastest mode.
+- **`low_memory`** for large exports that other programs will read: memory stays low when strings repeat (regions, statuses, …) and the file uses the standard shared string table. With many unique strings it keeps those strings in memory until `save`.
+
+In both disk-backed modes, writing to a row that was already written to disk raises `FastXlsx::Error`, and tables must be added before their data (see [Tables](#tables)). The two options can't be combined.
 
 ### Formats
 
@@ -61,7 +88,7 @@ ws.autofit                        # size other columns to the data written so fa
 ws.autofilter(0, 0, 100, 3)       # filter buttons on A1:D101 (first_row, first_col, last_row, last_col)
 ```
 
-`autofit` only sees rows still in memory, so it has no effect on rows already flushed in `constant_memory` mode.
+`autofit` only sees rows still in memory, so in `constant_memory` / `low_memory` mode it ignores rows already written to disk; set widths with `set_column_width` instead.
 
 ### Layout
 
@@ -137,7 +164,7 @@ ws.add_table(0, 0, sales.size + 1, 2, total_row: true, style: :medium2, # +1 row
 
 The range includes the header row and, with `total_row: true`, the total row; the table writes the headers. `columns` must match the range width. Options: `style` (`:light1`–`:light21`, `:medium1`–`:medium28`, `:dark1`–`:dark11`, `:none`), `name`, `total_row`, `banded_rows`, `autofilter`. Column totals: `:sum`, `:average`, `:count`, `:count_numbers`, `:max`, `:min`, `:std_dev`, `:var`.
 
-You can also add the table first and then append the data: after `add_table`, `<<` / `append` / `concat` continue right under the header row. In `constant_memory` mode this is the only order that works; adding a table whose header row was already flushed raises `FastXlsx::Error`.
+You can also add the table first and then append the data: after `add_table`, `<<` / `append` / `concat` continue right under the header row. In `constant_memory` / `low_memory` mode this is the only order that works; adding a table whose header row was already written to disk raises `FastXlsx::Error`.
 
 ### Charts
 
@@ -169,33 +196,56 @@ Values are mapped by type:
 | `nil` | empty cell |
 | anything else | `to_s` as string |
 
-`<<` and `concat` append after the last row written to that worksheet. In `constant_memory` mode rows are flushed as they are written, so fill each worksheet top to bottom.
+`<<` and `concat` append after the last row written to that worksheet. In `constant_memory` / `low_memory` mode rows are written to disk as you go, so fill each worksheet top to bottom.
 
-Errors from the writer (invalid sheet names, out-of-order rows in constant memory mode, …) raise `FastXlsx::Error`.
+Errors from the writer (invalid sheet names, writes to rows already on disk, …) raise `FastXlsx::Error`.
 
 ## Performance
 
-20,000 rows × 5 columns (integer, string, integer, `Time`, float), build + serialize to a String, median of 7 runs (3 for rubyXL), Apple Silicon, Ruby 4.0.5:
+Apple Silicon, Ruby 4.0.5. Each library uses its own idiomatic row-append API; xlsxtream is a streaming writer with fewer features.
 
-| Library | Time | vs fast_xlsx | Ruby objects allocated |
+### Speed
+
+20,000 rows × 5 columns (integer, string, integer, `Time`, float), build + serialize to a String, median of 7 runs (3 for rubyXL):
+
+| Library | Time | vs fastest | Ruby objects allocated |
 |---|---:|---:|---:|
-| **fast_xlsx** (constant_memory) | **93 ms** | 1.0x | 20,006 |
-| **fast_xlsx** | **102 ms** | 1.1x | 20,009 |
-| [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 184 ms | 2.0x | 561,740 |
-| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 203 ms | 2.2x | 20,079 |
-| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 | 244 ms | 2.6x | 320,076 |
-| [write_xlsx](https://github.com/cxn03651/write_xlsx) 1.15 | 594 ms | 6.4x | 1,483,899 |
-| [caxlsx](https://github.com/caxlsx/caxlsx) 4.5 | 701 ms | 7.6x | 745,122 |
-| [rubyXL](https://github.com/weshatheleopard/rubyXL) 3.4 | 2636 ms | 28.5x | 8,700,448 |
+| **fast_xlsx** (constant_memory) | **92 ms** | 1.0x | 7 |
+| **fast_xlsx** (low_memory) | **101 ms** | 1.1x | 7 |
+| **fast_xlsx** | **102 ms** | 1.1x | 10 |
+| [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 181 ms | 2.0x | 561,728 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 202 ms | 2.2x | 20,079 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 | 240 ms | 2.6x | 320,076 |
+| [write_xlsx](https://github.com/cxn03651/write_xlsx) 1.15 | 610 ms | 6.7x | 1,483,899 |
+| [caxlsx](https://github.com/caxlsx/caxlsx) 4.5 | 678 ms | 7.4x | 745,122 |
+| [rubyXL](https://github.com/weshatheleopard/rubyXL) 3.4 | 2624 ms | 28.6x | 8,700,448 |
 
-All outputs are 705–750 KB. Each library uses its own idiomatic row-append API; xlsxtream is a streaming writer with fewer features.
+All outputs are 702–750 KB.
 
-Reproduce:
+### Memory
+
+200,000 rows × 5 columns saved to a file; extra peak RSS over a process that only builds the data, median of 3 runs. "Unique" gives every row a different 100-character string; "repeated" uses a handful of values (regions, statuses), as most reports do:
+
+| Library | Unique strings | Repeated strings |
+|---|---:|---:|
+| **fast_xlsx** (constant_memory) | **+2 MB** | **+2 MB** |
+| **fast_xlsx** (low_memory) | +62 MB | **+2 MB** |
+| **fast_xlsx** | +270 MB | +217 MB |
+| fast_excel 0.5 (constant_memory) | +10 MB | +10 MB |
+| fast_excel 0.5 | +183 MB | +151 MB |
+
+The default mode uses more memory than fast_excel's: when saving, rust_xlsxwriter assembles each worksheet's XML in memory (so several worksheets can be built in parallel) instead of streaming it from a temp file. Use `constant_memory` or `low_memory` for large exports.
+
+### Reproduce
 
 ```bash
 bundle exec rake compile
 BUNDLE_GEMFILE=bench/Gemfile bundle install
-BUNDLE_GEMFILE=bench/Gemfile bundle exec ruby bench/compare.rb   # optional row count argument
+BUNDLE_GEMFILE=bench/Gemfile bundle exec ruby bench/compare.rb   # speed; optional row count argument
+
+# memory: peak RSS of one run (use /usr/bin/time -v on Linux); subtract the baseline
+BUNDLE_GEMFILE=bench/Gemfile /usr/bin/time -l bundle exec ruby bench/memory.rb baseline unique
+BUNDLE_GEMFILE=bench/Gemfile /usr/bin/time -l bundle exec ruby bench/memory.rb fast_xlsx:low unique
 ```
 
 ## Installation
