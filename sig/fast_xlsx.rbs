@@ -83,6 +83,11 @@ module FastXlsx
     def insert_chart: (Integer row, Integer col, type: Symbol, series: Array[chart_series],
                        ?title: String, ?x_axis: String, ?y_axis: String,
                        ?width: Integer, ?height: Integer) -> self
+    type table_column = String | { header: String, ?total: Symbol, ?total_label: String, ?format: Format }
+
+    def add_table: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
+                    ?columns: Array[table_column], ?style: Symbol, ?name: String,
+                    ?total_row: bool, ?banded_rows: bool, ?autofilter: bool) -> self
     def name: () -> String
     def next_row: () -> Integer
   end

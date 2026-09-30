@@ -14,7 +14,9 @@ use rust_xlsxwriter::{
     IntoDataValidationValue, IntoExcelData, XlsxError,
 };
 
-use rust_xlsxwriter::{Chart, ChartType, DocProperties, Image, Note};
+use rust_xlsxwriter::{
+    Chart, ChartType, DocProperties, Image, Note, Table, TableColumn, TableFunction, TableStyle,
+};
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
@@ -386,6 +388,109 @@ const CHART_TYPES: &[(&str, ChartType)] = &[
     ("radar", ChartType::Radar),
     ("scatter", ChartType::Scatter),
 ];
+
+// :none, :light1..:light21, :medium1..:medium28, :dark1..:dark11.
+const TABLE_STYLES: &[(&str, TableStyle)] = &[
+    ("none", TableStyle::None),
+    ("light1", TableStyle::Light1),
+    ("light2", TableStyle::Light2),
+    ("light3", TableStyle::Light3),
+    ("light4", TableStyle::Light4),
+    ("light5", TableStyle::Light5),
+    ("light6", TableStyle::Light6),
+    ("light7", TableStyle::Light7),
+    ("light8", TableStyle::Light8),
+    ("light9", TableStyle::Light9),
+    ("light10", TableStyle::Light10),
+    ("light11", TableStyle::Light11),
+    ("light12", TableStyle::Light12),
+    ("light13", TableStyle::Light13),
+    ("light14", TableStyle::Light14),
+    ("light15", TableStyle::Light15),
+    ("light16", TableStyle::Light16),
+    ("light17", TableStyle::Light17),
+    ("light18", TableStyle::Light18),
+    ("light19", TableStyle::Light19),
+    ("light20", TableStyle::Light20),
+    ("light21", TableStyle::Light21),
+    ("medium1", TableStyle::Medium1),
+    ("medium2", TableStyle::Medium2),
+    ("medium3", TableStyle::Medium3),
+    ("medium4", TableStyle::Medium4),
+    ("medium5", TableStyle::Medium5),
+    ("medium6", TableStyle::Medium6),
+    ("medium7", TableStyle::Medium7),
+    ("medium8", TableStyle::Medium8),
+    ("medium9", TableStyle::Medium9),
+    ("medium10", TableStyle::Medium10),
+    ("medium11", TableStyle::Medium11),
+    ("medium12", TableStyle::Medium12),
+    ("medium13", TableStyle::Medium13),
+    ("medium14", TableStyle::Medium14),
+    ("medium15", TableStyle::Medium15),
+    ("medium16", TableStyle::Medium16),
+    ("medium17", TableStyle::Medium17),
+    ("medium18", TableStyle::Medium18),
+    ("medium19", TableStyle::Medium19),
+    ("medium20", TableStyle::Medium20),
+    ("medium21", TableStyle::Medium21),
+    ("medium22", TableStyle::Medium22),
+    ("medium23", TableStyle::Medium23),
+    ("medium24", TableStyle::Medium24),
+    ("medium25", TableStyle::Medium25),
+    ("medium26", TableStyle::Medium26),
+    ("medium27", TableStyle::Medium27),
+    ("medium28", TableStyle::Medium28),
+    ("dark1", TableStyle::Dark1),
+    ("dark2", TableStyle::Dark2),
+    ("dark3", TableStyle::Dark3),
+    ("dark4", TableStyle::Dark4),
+    ("dark5", TableStyle::Dark5),
+    ("dark6", TableStyle::Dark6),
+    ("dark7", TableStyle::Dark7),
+    ("dark8", TableStyle::Dark8),
+    ("dark9", TableStyle::Dark9),
+    ("dark10", TableStyle::Dark10),
+    ("dark11", TableStyle::Dark11),
+];
+
+const TABLE_TOTALS: &[(&str, TableFunction)] = &[
+    ("sum", TableFunction::Sum),
+    ("average", TableFunction::Average),
+    ("count", TableFunction::Count),
+    ("count_numbers", TableFunction::CountNumbers),
+    ("max", TableFunction::Max),
+    ("min", TableFunction::Min),
+    ("std_dev", TableFunction::StdDev),
+    ("var", TableFunction::Var),
+];
+
+// A table column: a header String, or { header:, total:, total_label:, format: }.
+fn table_column(ruby: &Ruby, v: Value) -> Result<TableColumn, Error> {
+    let Some(spec) = RHash::from_value(v) else {
+        return Ok(TableColumn::new().set_header(String::try_convert(v)?));
+    };
+    check_keys(
+        ruby,
+        spec,
+        &["header", "total", "total_label", "format"],
+        "table column",
+    )?;
+    let nil = ruby.qnil().as_value();
+    let get = |name: &str| spec.get(ruby.to_symbol(name)).unwrap_or(nil);
+    let mut column = TableColumn::new().set_header(String::try_convert(get("header"))?);
+    if !get("total").is_nil() {
+        column =
+            column.set_total_function(choice(ruby, "table total", get("total"), TABLE_TOTALS)?);
+    }
+    if !get("total_label").is_nil() {
+        column = column.set_total_label(String::try_convert(get("total_label"))?);
+    }
+    if let Some(format) = Option::<&Format>::try_convert(get("format"))? {
+        column = column.set_format(&format.0);
+    }
+    Ok(column)
+}
 
 const BORDERS: &[(&str, FormatBorder)] = &[
     ("thin", FormatBorder::Thin),
@@ -1042,6 +1147,76 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn add_table(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        fr: u32,
+        fc: u16,
+        lr: u32,
+        lc: u16,
+        options: RHash,
+    ) -> Result<Obj<Self>, Error> {
+        check_keys(
+            ruby,
+            options,
+            &[
+                "columns",
+                "style",
+                "name",
+                "total_row",
+                "banded_rows",
+                "autofilter",
+            ],
+            "add_table",
+        )?;
+        let nil = ruby.qnil().as_value();
+        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        let flag = |name: &str, default: bool| {
+            let v = opt(name);
+            if v.is_nil() {
+                default
+            } else {
+                v.to_bool()
+            }
+        };
+        let mut table = Table::new()
+            .set_total_row(flag("total_row", false))
+            .set_banded_rows(flag("banded_rows", true))
+            .set_autofilter(flag("autofilter", true));
+        if !opt("columns").is_nil() {
+            let specs = RArray::try_convert(opt("columns"))?;
+            let width = usize::from(lc.saturating_sub(fc)) + 1;
+            if specs.len() != width {
+                return Err(Error::new(
+                    ruby.exception_arg_error(),
+                    format!(
+                        "columns: has {} entries but the range is {width} columns wide",
+                        specs.len()
+                    ),
+                ));
+            }
+            let columns = specs
+                .into_iter()
+                .map(|v| table_column(ruby, v))
+                .collect::<Result<Vec<_>, _>>()?;
+            table = table.set_columns(&columns);
+        }
+        if !opt("style").is_nil() {
+            table = table.set_style(choice(ruby, "table style", opt("style"), TABLE_STYLES)?);
+        }
+        if !opt("name").is_nil() {
+            table = table.set_name(String::try_convert(opt("name"))?);
+        }
+        rb_self.with_ws(|ws| {
+            ws.add_table(fr, fc, lr, lc, &table)
+                .map(|_| ())
+                .map_err(xerr)
+        })?;
+        rb_self.advance(lr);
+        Ok(rb_self)
+    }
+
     fn name(&self) -> Result<String, Error> {
         self.with_ws(|ws| Ok(ws.name()))
     }
@@ -1076,6 +1251,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
     ws.define_method("_insert_image", method!(Worksheet::insert_image, 4))?;
     ws.define_method("_insert_chart", method!(Worksheet::insert_chart, 3))?;
+    ws.define_method("_add_table", method!(Worksheet::add_table, 5))?;
     ws.define_method(
         "_conditional_format",
         method!(Worksheet::conditional_format, 5),

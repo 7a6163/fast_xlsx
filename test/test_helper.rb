@@ -140,6 +140,18 @@ module XlsxHelpers
      ((to_row - from_row) * 20) + ((to_row_off - from_row_off) / 9525)]
   end
 
+  # The first Excel table (xl/tables/table1.xml) in the workbook.
+  def table(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    xml = Nokogiri::XML(zip.read("xl/tables/table1.xml")).remove_namespaces!
+    t = xml.root
+    {
+      ref: t["ref"], name: t["displayName"], totals: t["totalsRowCount"].to_i, autofilter: !t.at("autoFilter").nil?,
+      style: t.at("tableStyleInfo")&.[]("name"), banded_rows: t.at("tableStyleInfo")&.[]("showRowStripes"),
+      columns: t.css("tableColumn").map { |c| [c["name"], c["totalsRowFunction"], c["totalsRowLabel"]] }
+    }
+  end
+
   private
 
   def style_hash(styles, cell_xf)

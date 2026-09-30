@@ -131,6 +131,14 @@ module FastXlsx
       _insert_chart(row, col, { type: type, series: series, ** })
     end
 
+    # Turns the range (header row included, total row too when total_row: true)
+    # into an Excel table. columns: header Strings or { header:, total:,
+    # total_label:, format: }; other options: style:, name:, total_row:,
+    # banded_rows:, autofilter:.
+    def add_table(first_row, first_col, last_row, last_col, **)
+      _add_table(first_row, first_col, last_row, last_col, { ** })
+    end
+
     # Printed page header/footer using Excel codes such as "&CPage &P of &N".
     # margin: is in inches.
     def set_header(text, margin: nil)

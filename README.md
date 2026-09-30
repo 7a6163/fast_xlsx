@@ -127,6 +127,16 @@ A String is always treated as a path, so wrap raw bytes (such as Active Storage'
 
 The source is a file path or any IO responding to `#read` (PNG, JPEG, GIF or BMP). Offsets are in pixels. Data that is not a supported image raises `FastXlsx::Error`.
 
+### Tables
+
+```ruby
+ws.concat([%w[Region Rep Sales], *sales])            # header row, then the data
+ws.add_table(0, 0, sales.size + 1, 2, total_row: true, style: :medium2, # +1 row for the totals
+             columns: [{ header: "Region", total_label: "Total" }, "Rep", { header: "Sales", total: :sum }])
+```
+
+The range includes the header row and, with `total_row: true`, the total row; the table writes the headers. `columns` must match the range width. Options: `style` (`:light1`–`:light21`, `:medium1`–`:medium28`, `:dark1`–`:dark11`, `:none`), `name`, `total_row`, `banded_rows`, `autofilter`. Column totals: `:sum`, `:average`, `:count`, `:count_numbers`, `:max`, `:min`, `:std_dev`, `:var`.
+
 ### Charts
 
 ```ruby

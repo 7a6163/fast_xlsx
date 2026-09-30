@@ -625,6 +625,46 @@ class TestFastXlsx < Minitest::Test
     ws.set_header("&[Page]#{"x" * 253}") # &[Page] counts as &P, so this is 255
   end
 
+  def test_add_table_with_headers_and_style
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(1, 0, "North")
+    ws.add_table(0, 0, 3, 1, columns: %w[Region Sales], style: :medium2)
+
+    t = table(wb)
+    assert_equal ["A1:B4", "TableStyleMedium2", true], t.values_at(:ref, :style, :autofilter)
+    assert_equal [["Region", nil, nil], ["Sales", nil, nil]], t[:columns]
+    assert_equal [%w[Region Sales], ["North", nil]], rows(wb).first(2)
+  end
+
+  def test_add_table_total_row
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.add_table(0, 0, 4, 1, total_row: true,
+                             columns: [{ header: "Region", total_label: "Total" }, { header: "Sales", total: :sum }])
+
+    t = table(wb)
+    assert_equal ["A1:B5", 1], t.values_at(:ref, :totals)
+    assert_equal [["Region", nil, "Total"], %w[Sales sum] + [nil]], t[:columns]
+  end
+
+  def test_add_table_name_and_options
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.add_table(0, 0, 2, 0, columns: %w[A], name: "Sales", banded_rows: false, autofilter: false)
+
+    assert_equal ["Sales", "0", false], table(wb).values_at(:name, :banded_rows, :autofilter)
+  end
+
+  def test_add_table_validates_columns_style_and_options
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.add_table(0, 0, 3, 2, columns: %w[A B]) }
+    assert_includes error.message, "3"
+    error = assert_raises(ArgumentError) { ws.add_table(0, 0, 3, 0, columns: %w[A], style: :medium99) }
+    assert_includes error.message, "medium99"
+    error = assert_raises(ArgumentError) { ws.add_table(0, 0, 3, 0, columns: [{ header: "A", totl: :sum }]) }
+    assert_includes error.message, "totl"
+  end
+
   def test_option_typos_raise_instead_of_being_ignored
     ws = FastXlsx::Workbook.new.add_worksheet
     png = -> { StringIO.new(PNG_1X1) }
