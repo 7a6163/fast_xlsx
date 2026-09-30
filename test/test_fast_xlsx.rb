@@ -942,6 +942,21 @@ class TestFastXlsx < Minitest::Test
     assert_equal [999, "row 999"], written.last
   end
 
+  # The rows a tall merge spans are held back by rust_xlsxwriter, not yet on
+  # disk, so cells beside the merge can still be written.
+  def test_cells_beside_a_tall_merge_can_be_written
+    %i[constant low].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      ws = wb.add_worksheet
+      ws.merge_range(0, 0, 2, 0, "Tall")
+      ws.write(1, 1, "x").write(2, 1, "y")
+      ws << ["after"]
+
+      assert_equal [["Tall", nil], [nil, "x"], [nil, "y"], ["after", nil]], rows(wb), "memory: #{memory}"
+      assert_match(/<mergeCell ref="A1:A3"/, sheet_xml(wb))
+    end
+  end
+
   def test_merge_range_over_flushed_rows_raises
     %i[constant low].each do |memory|
       ws = FastXlsx::Workbook.new(memory: memory).add_worksheet

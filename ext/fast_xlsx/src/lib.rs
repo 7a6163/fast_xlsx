@@ -49,7 +49,11 @@ struct Workbook {
 struct Worksheet {
     wb: Shared,
     index: usize,
+    // Where << / append write next.
     next_row: Cell<u32>,
+    // Highest row with cells written. In :constant / :low mode rows above it
+    // are on disk; rows a merge spans are held back, so merges don't count.
+    last_written_row: Cell<u32>,
     // constant_memory and low_memory worksheets write finished rows to disk.
     flushes_rows: bool,
     // Formats of table columns, for cells written into a table's data rows
@@ -112,6 +116,7 @@ impl Workbook {
             wb: self.inner.clone(),
             index: wb.worksheets().len() - 1,
             next_row: Cell::new(0),
+            last_written_row: Cell::new(0),
             flushes_rows: self.constant_memory || self.low_memory,
             table_formats: RefCell::new(Vec::new()),
         })
@@ -747,9 +752,14 @@ impl Worksheet {
         self.next_row.set(self.next_row.get().max(row + 1));
     }
 
+    fn note_written(&self, row: u32) {
+        self.last_written_row
+            .set(self.last_written_row.get().max(row));
+    }
+
     // rust_xlsxwriter silently drops writes to rows it has already flushed.
     fn check_not_flushed(&self, ruby: &Ruby, row: u32) -> Result<(), Error> {
-        if self.flushes_rows && row + 1 < self.next_row.get() {
+        if self.flushes_rows && row < self.last_written_row.get() {
             return Err(Error::new(
                 ruby.get_inner(&ERROR),
                 format!(
@@ -813,6 +823,7 @@ impl Worksheet {
             Ok(())
         })?;
         self.advance(row);
+        self.note_written(row);
         Ok(())
     }
 
@@ -831,6 +842,7 @@ impl Worksheet {
             value.write(ws, row, col, Self::cell_format(&tables, row, col, format))
         })?;
         rb_self.advance(row);
+        rb_self.note_written(row);
         Ok(())
     }
 
@@ -972,6 +984,7 @@ impl Worksheet {
             value.write(ws, first_row, first_col, format.map(|f| &f.0))
         })?;
         rb_self.advance(last_row);
+        rb_self.note_written(first_row);
         Ok(rb_self)
     }
 
@@ -1417,6 +1430,7 @@ impl Worksheet {
             );
         // Continue appending under the header, so `<<` fills the table.
         rb_self.advance(fr);
+        rb_self.note_written(fr);
         Ok(rb_self)
     }
 
