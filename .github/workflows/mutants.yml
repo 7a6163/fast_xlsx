@@ -27,7 +27,12 @@ jobs:
           rubygems: '4.0.10'
       - uses: taiki-e/install-action@cargo-mutants
       - name: Run cargo-mutants
-        run: cargo mutants --file ext/fast_xlsx/src/lib.rs --jobs 2
+        # Exit 2 means some mutant was missed (fail). Exit 3 means only timeouts:
+        # those mutants hang the code (e.g. an index that never advances), which
+        # counts as caught.
+        run: |
+          cargo mutants --file ext/fast_xlsx/src/lib.rs --jobs 2 || status=$?
+          if [ "${status:-0}" -ne 0 ] && [ "${status}" -ne 3 ]; then exit "$status"; fi
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v7
