@@ -21,3 +21,4 @@
 - `Worksheet#insert_chart` (column, bar, line, area, stacked variants, pie, doughnut, radar, scatter) with titles, axis names and size
 - `autofit` keeps widths set with `set_column_width` (fast_excel #85)
 - `URL.new(url, text:)` shows other text in the cell (fast_excel #69)
+- `insert_image(..., width:, height:)` in pixels (fast_excel #9)

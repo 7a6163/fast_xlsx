@@ -497,6 +497,21 @@ class TestFastXlsx < Minitest::Test
                  anchor.values_at(:cx, :cy, :col_off, :row_off, :alt_text)
   end
 
+  def test_insert_image_with_pixel_width_and_height
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.insert_image(0, 0, StringIO.new(PNG_1X1), width: 40, height: 20)
+    ws.insert_image(5, 0, StringIO.new(PNG_1X1), width: 30) # keeps the aspect ratio
+
+    sizes = images(wb).first.map { |a| [a[:cx] / 9525, a[:cy] / 9525] }
+    assert_equal [[40, 20], [30, 30]], sizes
+  end
+
+  def test_insert_image_rejects_scale_with_width_or_height
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(ArgumentError) { ws.insert_image(0, 0, StringIO.new(PNG_1X1), scale: 2, width: 40) }
+  end
+
   def test_insert_image_rejects_non_image_data
     ws = FastXlsx::Workbook.new.add_worksheet
     assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new("not an image")) }

@@ -796,9 +796,33 @@ impl Worksheet {
         };
         // SAFETY: the bytes are copied into the Image before any Ruby code runs.
         let mut image = Image::new_from_buffer(unsafe { bytes.as_slice() }).map_err(xerr)?;
+        let pixels = |name: &str| -> Result<Option<f64>, Error> {
+            let v = opt(name);
+            if v.is_nil() {
+                Ok(None)
+            } else {
+                f64::try_convert(v).map(Some)
+            }
+        };
+        let (width, height) = (pixels("width")?, pixels("height")?);
         if !opt("scale").is_nil() {
+            if width.is_some() || height.is_some() {
+                return Err(Error::new(
+                    ruby.exception_arg_error(),
+                    "pass either scale: or width:/height:, not both",
+                ));
+            }
             let scale = f64::try_convert(opt("scale"))?;
             image = image.set_scale_width(scale).set_scale_height(scale);
+        } else if width.is_some() || height.is_some() {
+            // Displayed size at scale 1, as rust_xlsxwriter computes it from the DPI.
+            let natural_w = image.width() * 96.0 / image.width_dpi();
+            let natural_h = image.height() * 96.0 / image.height_dpi();
+            let scale_w = width.map(|w| w / natural_w);
+            let scale_h = height.map(|h| h / natural_h);
+            // With only one dimension, scale the other by the same factor.
+            let (sw, sh) = (scale_w.or(scale_h).unwrap(), scale_h.or(scale_w).unwrap());
+            image = image.set_scale_width(sw).set_scale_height(sh);
         }
         if !opt("alt_text").is_nil() {
             image = image.set_alt_text(String::try_convert(opt("alt_text"))?);
