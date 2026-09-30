@@ -450,6 +450,35 @@ class TestFastXlsx < Minitest::Test
     assert_equal "Estimate", notes["B3"].last
   end
 
+  def test_insert_image_from_path
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "logo.png")
+      File.binwrite(path, PNG_1X1)
+      wb = FastXlsx::Workbook.new
+      wb.add_worksheet.insert_image(2, 1, path)
+
+      anchors, media = images(wb)
+      assert_equal 1, media
+      assert_equal [1, 2, 9525, 9525], anchors.first.values_at(:col, :row, :cx, :cy)
+    end
+  end
+
+  def test_insert_image_from_io_with_scale_offset_and_alt_text
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.insert_image(0, 0, StringIO.new(PNG_1X1), scale: 2, x_offset: 10, y_offset: 5,
+                                                               alt_text: "Company logo")
+
+    anchor = images(wb).first.first
+    # 1 px = 9525 EMU at 96 DPI.
+    assert_equal [19_050, 19_050, 95_250, 47_625, "Company logo"],
+                 anchor.values_at(:cx, :cy, :col_off, :row_off, :alt_text)
+  end
+
+  def test_insert_image_rejects_non_image_data
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new("not an image")) }
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

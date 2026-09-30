@@ -88,6 +88,28 @@ module XlsxHelpers
     end
   end
 
+  # A 1x1 PNG with no DPI chunk, so Excel treats it as 96 DPI (9525 EMU per pixel).
+  PNG_1X1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk" \
+            "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==".unpack1("m")
+
+  # Images on sheet 1: anchor cell, offsets and size in EMU, alt text, plus the media file count.
+  def images(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    media = zip.glob("xl/media/*").size
+    return [[], media] unless zip.find_entry("xl/drawings/drawing1.xml")
+
+    drawing = Nokogiri::XML(zip.read("xl/drawings/drawing1.xml")).remove_namespaces!
+    anchors = drawing.css("twoCellAnchor, oneCellAnchor").map do |a|
+      from = a.at("from")
+      {
+        col: from.at("col").text.to_i, row: from.at("row").text.to_i,
+        col_off: from.at("colOff").text.to_i, row_off: from.at("rowOff").text.to_i,
+        cx: a.at("xfrm ext")["cx"].to_i, cy: a.at("xfrm ext")["cy"].to_i, alt_text: a.at("cNvPr")["descr"]
+      }
+    end
+    [anchors, media]
+  end
+
   private
 
   def style_hash(styles, cell_xf)

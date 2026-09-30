@@ -84,6 +84,14 @@ module FastXlsx
       _write_comment(row, col, text, author)
     end
 
+    # Inserts a PNG, JPEG, GIF or BMP image with its top-left corner in the
+    # cell. source is a file path or an IO (anything responding to #read).
+    # Options: scale:, x_offset:, y_offset: (pixels), alt_text:.
+    def insert_image(row, col, source, **)
+      bytes = source.respond_to?(:read) ? source.read : File.binread(source)
+      _insert_image(row, col, bytes, { ** })
+    end
+
     # Default format for cells in these columns that are written without one.
     def set_column_format(columns, format)
       _set_column_format(*column_bounds(columns), format)

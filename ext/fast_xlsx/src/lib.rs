@@ -14,7 +14,7 @@ use rust_xlsxwriter::{
     IntoDataValidationValue, IntoExcelData, XlsxError,
 };
 
-use rust_xlsxwriter::Note;
+use rust_xlsxwriter::{Image, Note};
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
@@ -757,6 +757,42 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn insert_image(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        row: u32,
+        col: u16,
+        bytes: RString,
+        options: RHash,
+    ) -> Result<Obj<Self>, Error> {
+        let nil = ruby.qnil().as_value();
+        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        let offset = |name: &str| -> Result<u32, Error> {
+            let v = opt(name);
+            if v.is_nil() {
+                Ok(0)
+            } else {
+                u32::try_convert(v)
+            }
+        };
+        // SAFETY: the bytes are copied into the Image before any Ruby code runs.
+        let mut image = Image::new_from_buffer(unsafe { bytes.as_slice() }).map_err(xerr)?;
+        if !opt("scale").is_nil() {
+            let scale = f64::try_convert(opt("scale"))?;
+            image = image.set_scale_width(scale).set_scale_height(scale);
+        }
+        if !opt("alt_text").is_nil() {
+            image = image.set_alt_text(String::try_convert(opt("alt_text"))?);
+        }
+        let (x, y) = (offset("x_offset")?, offset("y_offset")?);
+        rb_self.with_ws(|ws| {
+            ws.insert_image_with_offset(row, col, &image, x, y)
+                .map(|_| ())
+                .map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
     fn name(&self) -> Result<String, Error> {
         self.with_ws(|ws| Ok(ws.name()))
     }
@@ -788,6 +824,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
     ws.define_method("name", method!(Worksheet::name, 0))?;
     ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
+    ws.define_method("_insert_image", method!(Worksheet::insert_image, 4))?;
     ws.define_method(
         "_conditional_format",
         method!(Worksheet::conditional_format, 5),

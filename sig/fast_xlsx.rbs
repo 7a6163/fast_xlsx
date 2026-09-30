@@ -4,6 +4,10 @@ module FastXlsx
   class Error < StandardError
   end
 
+  interface _Reader
+    def read: () -> String
+  end
+
   type cell = Numeric | String | Time | Date | Formula | URL | bool | nil | _ToS
 
   class Formula
@@ -62,6 +66,8 @@ module FastXlsx
                           ?input_title: String, ?input_message: String,
                           ?error_title: String, ?error_message: String) -> self
     def write_comment: (Integer row, Integer col, String text, ?author: String?) -> self
+    def insert_image: (Integer row, Integer col, String | _Reader source, ?scale: Numeric,
+                       ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
     def name: () -> String
     def next_row: () -> Integer
   end
