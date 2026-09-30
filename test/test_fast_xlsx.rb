@@ -636,6 +636,23 @@ class TestFastXlsx < Minitest::Test
     assert_raises(FastXlsx::Error) { wb.add_worksheet("bad[name]") }
   end
 
+  def test_set_properties
+    wb = FastXlsx::Workbook.new
+    wb.set_properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")
+    wb.add_worksheet
+
+    zip = Zip::File.open_buffer(StringIO.new(wb.to_xlsx))
+    core = Nokogiri::XML(zip.read("docProps/core.xml")).remove_namespaces!
+    app = Nokogiri::XML(zip.read("docProps/app.xml")).remove_namespaces!
+    assert_equal ["Q3 report", "Zac", "Confidential"], %w[title creator keywords].map { |t| core.at(t).text }
+    assert_equal "Acme", app.at("Company").text
+  end
+
+  def test_set_properties_rejects_unknown_fields
+    error = assert_raises(ArgumentError) { FastXlsx::Workbook.new.set_properties(titel: "typo") }
+    assert_includes error.message, "titel"
+  end
+
   def test_save_writes_a_readable_file
     Dir.mktmpdir do |dir|
       path = File.join(dir, "out.xlsx")

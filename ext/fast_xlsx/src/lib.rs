@@ -14,7 +14,7 @@ use rust_xlsxwriter::{
     IntoDataValidationValue, IntoExcelData, XlsxError,
 };
 
-use rust_xlsxwriter::{Chart, ChartType, Image, Note};
+use rust_xlsxwriter::{Chart, ChartType, DocProperties, Image, Note};
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
@@ -87,6 +87,32 @@ impl Workbook {
 
     fn save(&self, path: String) -> Result<(), Error> {
         self.inner.lock().unwrap().save(path).map_err(xerr)
+    }
+
+    fn set_properties(ruby: &Ruby, rb_self: &Self, fields: RHash) -> Result<(), Error> {
+        let mut props = DocProperties::new();
+        fields.foreach(|key: Symbol, value: String| {
+            props = match &*key.name()? {
+                "title" => props.clone().set_title(value),
+                "subject" => props.clone().set_subject(value),
+                "author" => props.clone().set_author(value),
+                "manager" => props.clone().set_manager(value),
+                "company" => props.clone().set_company(value),
+                "category" => props.clone().set_category(value),
+                "keywords" => props.clone().set_keywords(value),
+                "comments" => props.clone().set_comment(value),
+                "status" => props.clone().set_status(value),
+                other => {
+                    return Err(Error::new(
+                        ruby.exception_arg_error(),
+                        format!("unknown property: {other}"),
+                    ))
+                }
+            };
+            Ok(ForEach::Continue)
+        })?;
+        rb_self.inner.lock().unwrap().set_properties(&props);
+        Ok(())
     }
 }
 
@@ -921,6 +947,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     wb.define_method("_add_worksheet", method!(Workbook::add_worksheet, 1))?;
     wb.define_method("to_xlsx", method!(Workbook::to_xlsx, 0))?;
     wb.define_method("save", method!(Workbook::save, 1))?;
+    wb.define_method("_set_properties", method!(Workbook::set_properties, 1))?;
 
     let ws = module.define_class("Worksheet", ruby.class_object())?;
     ws.define_method("_write", method!(Worksheet::write, 4))?;

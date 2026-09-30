@@ -18,6 +18,7 @@ ws << ["id", "name", "created_at"]                # append a row
 ws.concat(records.map { |r| [r.id, r.name, r.created_at] })  # append many rows in one call
 ws.write(0, 5, 42)                                # write a single cell (row, col, value)
 
+wb.set_properties(title: "Q3 report", author: "Zac", keywords: "Confidential") # File > Info in Excel
 wb.save("report.xlsx")                            # or wb.to_xlsx => binary String
 ```
 

@@ -26,6 +26,9 @@ module FastXlsx
     def add_worksheet: (?String? name) -> Worksheet
     def worksheets: () -> Array[Worksheet]
     def worksheet: (String name) -> Worksheet?
+    def set_properties: (?title: String, ?subject: String, ?author: String, ?manager: String,
+                         ?company: String, ?category: String, ?keywords: String,
+                         ?comments: String, ?status: String) -> self
     def to_xlsx: () -> String
     def save: (String path) -> void
   end

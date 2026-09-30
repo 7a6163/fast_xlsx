@@ -23,3 +23,4 @@
 - `URL.new(url, text:)` shows other text in the cell (fast_excel #69)
 - `insert_image(..., width:, height:)` in pixels (fast_excel #9)
 - `Worksheet#set_page_breaks` and `#set_vertical_page_breaks` (fast_excel #109)
+- `Workbook#set_properties` for document properties (fast_excel #30)

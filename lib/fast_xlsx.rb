@@ -46,6 +46,13 @@ module FastXlsx
     def worksheet(name)
       worksheets.find { |ws| ws.name == name }
     end
+
+    # Document properties shown in Excel's File > Info: title:, subject:,
+    # author:, manager:, company:, category:, keywords:, comments:, status:.
+    def set_properties(**fields)
+      _set_properties(fields)
+      self
+    end
   end
 
   # Cell writer for one sheet; create with Workbook#add_worksheet.
