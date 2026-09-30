@@ -158,6 +158,31 @@ class TestFastXlsx < Minitest::Test
     assert_match(/<autoFilter ref="A1:C3"/, sheet_xml(wb))
   end
 
+  def test_font_size_and_name
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(font_size: 14, font_name: "Arial"))
+
+    style = cell_style(wb, "A1")
+    assert_equal 14.0, style[:font_size]
+    assert_equal "Arial", style[:font_name]
+  end
+
+  def test_font_and_background_colors_from_hex_string_or_integer
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(font_color: "#FF0000", bg_color: 0x00FF00))
+
+    style = cell_style(wb, "A1")
+    assert_equal "FFFF0000", style[:font_color]
+    assert_equal "FF00FF00", style[:bg_color]
+  end
+
+  def test_invalid_color_raises
+    error = assert_raises(ArgumentError) { FastXlsx::Format.new(font_color: "red") }
+    assert_includes error.message, "red"
+    error = assert_raises(ArgumentError) { FastXlsx::Format.new(bg_color: "#12345") }
+    assert_includes error.message, "#12345"
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

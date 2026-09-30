@@ -38,4 +38,28 @@ module XlsxHelpers
       (min.to_i..max.to_i).each { |c| h[c] = w.to_f }
     end
   end
+
+  # Resolved style of one cell (e.g. "A1") from xl/styles.xml, which roo does not expose.
+  def cell_style(workbook, ref)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    sheet = Nokogiri::XML(zip.read("xl/worksheets/sheet1.xml")).remove_namespaces!
+    styles = Nokogiri::XML(zip.read("xl/styles.xml")).remove_namespaces!
+    xf = styles.css("cellXfs > xf")[sheet.at("c[r='#{ref}']")["s"].to_i]
+    style_hash(styles, xf)
+  end
+
+  private
+
+  def style_hash(styles, cell_xf)
+    font = styles.css("fonts > font")[cell_xf["fontId"].to_i]
+    fill = styles.css("fills > fill")[cell_xf["fillId"].to_i]
+    border = styles.css("borders > border")[cell_xf["borderId"].to_i]
+    align = cell_xf.at("alignment")
+    {
+      font_size: font.at("sz")&.[]("val")&.to_f, font_name: font.at("name")&.[]("val"),
+      font_color: font.at("color")&.[]("rgb"), bg_color: fill.at("fgColor")&.[]("rgb"),
+      align: align&.[]("horizontal"), valign: align&.[]("vertical"), text_wrap: align&.[]("wrapText") == "1",
+      border: %w[left right top bottom].to_h { |side| [side.to_sym, border.at(side)&.[]("style")] }
+    }
+  end
 end

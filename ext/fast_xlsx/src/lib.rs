@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex};
 
 use magnus::{
     function, method, prelude::*, r_hash::ForEach, typed_data::Obj, value::Lazy, Error,
-    ExceptionClass, RArray, RClass, RHash, RModule, RString, Ruby, Symbol, TryConvert, Value,
+    ExceptionClass, Integer, RArray, RClass, RHash, RModule, RString, Ruby, Symbol, TryConvert,
+    Value,
 };
-use rust_xlsxwriter::{FormatUnderline, IntoExcelData, XlsxError};
+use rust_xlsxwriter::{Color, FormatUnderline, IntoExcelData, XlsxError};
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
@@ -150,6 +151,29 @@ fn put(
     }
 }
 
+// "#RRGGBB" or 0xRRGGBB.
+fn color(ruby: &Ruby, value: Value) -> Result<Color, Error> {
+    let rgb = if let Some(i) = Integer::from_value(value) {
+        i.to_u32().ok().filter(|n| *n <= 0xFF_FFFF)
+    } else if let Some(s) = RString::from_value(value) {
+        let s = s.to_string()?;
+        s.strip_prefix('#')
+            .filter(|hex| hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit()))
+            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+    } else {
+        None
+    };
+    rgb.map(Color::RGB).ok_or_else(|| {
+        Error::new(
+            ruby.exception_arg_error(),
+            format!(
+                "invalid color {}: use \"#RRGGBB\" or 0xRRGGBB",
+                value.inspect()
+            ),
+        )
+    })
+}
+
 #[magnus::wrap(class = "FastXlsx::Format", free_immediately)]
 struct Format(rust_xlsxwriter::Format);
 
@@ -163,6 +187,10 @@ impl Format {
                 "italic" if value.to_bool() => taken.set_italic(),
                 "underline" if value.to_bool() => taken.set_underline(FormatUnderline::Single),
                 "num_format" => taken.set_num_format(String::try_convert(value)?),
+                "font_size" => taken.set_font_size(f64::try_convert(value)?),
+                "font_name" => taken.set_font_name(String::try_convert(value)?),
+                "font_color" => taken.set_font_color(color(ruby, value)?),
+                "bg_color" => taken.set_background_color(color(ruby, value)?),
                 "bold" | "italic" | "underline" => taken,
                 other => {
                     return Err(Error::new(

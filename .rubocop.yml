@@ -9,11 +9,7 @@ Style/StringLiterals:
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
 
-Metrics/MethodLength:
-  Exclude:
-    - test/**/*
-
-Metrics/ClassLength:
+Metrics:
   Exclude:
     - test/**/*
 
