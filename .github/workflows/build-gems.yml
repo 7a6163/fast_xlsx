@@ -145,6 +145,8 @@ jobs:
       # GEM_HOST_API_KEY over --key, so once the RubyGems credentials below are
       # configured they would be sent to whichever host is pushed to.
       - name: Push to GitHub Packages
+        # A GitHub Packages problem must not stop the RubyGems release below.
+        continue-on-error: true
         env:
           GEM_HOST_API_KEY: Bearer ${{ secrets.GITHUB_TOKEN }}
         run: |
