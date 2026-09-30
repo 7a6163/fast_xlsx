@@ -715,6 +715,24 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  def test_table_column_format_applies_to_rows_appended_later
+    money = FastXlsx::Format.new(num_format: "#,##0.00")
+    bold = FastXlsx::Format.new(bold: true)
+    %i[standard constant].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      ws = wb.add_worksheet
+      ws.add_table(0, 0, 3, 1, columns: ["Region", { header: "Sales", format: money }])
+      ws.concat([["North", 1.5], ["South", 2.5]])
+      ws.append(["East", 3.5], format: bold) # an explicit format wins
+      ws << ["outside", 4.5]                 # row 5 is below the table
+
+      xlsx = open_xlsx(wb)
+      assert_equal ["#,##0.00", "#,##0.00"], [xlsx.excelx_format(2, 2), xlsx.excelx_format(3, 2)], "memory: #{memory}"
+      assert_equal "General", xlsx.excelx_format(4, 2), "memory: #{memory}"
+      assert_equal "General", xlsx.excelx_format(5, 2), "memory: #{memory}"
+    end
+  end
+
   def test_add_table_after_its_header_row_was_flushed_raises
     wb = FastXlsx::Workbook.new(memory: :constant)
     ws = wb.add_worksheet

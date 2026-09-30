@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex};
 
 use magnus::{
@@ -52,6 +52,16 @@ struct Worksheet {
     next_row: Cell<u32>,
     // constant_memory and low_memory worksheets write finished rows to disk.
     flushes_rows: bool,
+    // Formats of table columns, for cells written into a table's data rows
+    // after add_table (rust_xlsxwriter only formats cells that already exist).
+    // Owned copies, so they don't depend on the Ruby Format objects living on.
+    table_formats: RefCell<Vec<TableColumnFormat>>,
+}
+
+struct TableColumnFormat {
+    rows: std::ops::RangeInclusive<u32>,
+    col: u16,
+    format: rust_xlsxwriter::Format,
 }
 
 impl Workbook {
@@ -80,6 +90,7 @@ impl Workbook {
             index: wb.worksheets().len() - 1,
             next_row: Cell::new(0),
             flushes_rows: self.constant_memory || self.low_memory,
+            table_formats: RefCell::new(Vec::new()),
         })
     }
 
@@ -144,10 +155,10 @@ fn emit<T: IntoExcelData>(
     row: u32,
     col: u16,
     data: T,
-    format: Option<&Format>,
+    format: Option<&rust_xlsxwriter::Format>,
 ) -> Result<(), Error> {
     match format {
-        Some(f) => ws.write_with_format(row, col, data, &f.0),
+        Some(f) => ws.write_with_format(row, col, data, f),
         None => ws.write(row, col, data),
     }
     .map(|_| ())
@@ -208,7 +219,7 @@ impl CellValue {
         ws: &mut rust_xlsxwriter::Worksheet,
         row: u32,
         col: u16,
-        format: Option<&Format>,
+        format: Option<&rust_xlsxwriter::Format>,
     ) -> Result<(), Error> {
         match self {
             CellValue::Empty => Ok(()),
@@ -239,7 +250,7 @@ impl CellValue {
                     .map(|(f, text)| (f.map_or(&default, |f| &f.0), text.as_str()))
                     .collect();
                 match format {
-                    Some(f) => ws.write_rich_string_with_format(row, col, &rich, &f.0),
+                    Some(f) => ws.write_rich_string_with_format(row, col, &rich, f),
                     None => ws.write_rich_string(row, col, &rich),
                 }
                 .map(|_| ())
@@ -524,9 +535,13 @@ const TABLE_TOTALS: &[(&str, TableFunction)] = &[
 ];
 
 // A table column: a header String, or { header:, total:, total_label:, format: }.
-fn table_column(ruby: &Ruby, v: Value) -> Result<TableColumn, Error> {
+// Also returns a copy of the column's format, if any, for later writes.
+fn table_column(
+    ruby: &Ruby,
+    v: Value,
+) -> Result<(TableColumn, Option<rust_xlsxwriter::Format>), Error> {
     let Some(spec) = RHash::from_value(v) else {
-        return Ok(TableColumn::new().set_header(String::try_convert(v)?));
+        return Ok((TableColumn::new().set_header(String::try_convert(v)?), None));
     };
     check_keys(
         ruby,
@@ -544,10 +559,11 @@ fn table_column(ruby: &Ruby, v: Value) -> Result<TableColumn, Error> {
     if !get("total_label").is_nil() {
         column = column.set_total_label(String::try_convert(get("total_label"))?);
     }
-    if let Some(format) = Option::<&Format>::try_convert(get("format"))? {
-        column = column.set_format(&format.0);
+    let format = Option::<&Format>::try_convert(get("format"))?.map(|f| f.0.clone());
+    if let Some(f) = &format {
+        column = column.set_format(f);
     }
-    Ok(column)
+    Ok((column, format))
 }
 
 const BORDERS: &[(&str, FormatBorder)] = &[
@@ -720,6 +736,22 @@ impl Worksheet {
         f(wb.worksheet_from_index(self.index).map_err(xerr)?)
     }
 
+    // The format to write a cell with: its own, else its table column's.
+    fn cell_format<'a>(
+        tables: &'a [TableColumnFormat],
+        row: u32,
+        col: u16,
+        own: Option<&'a Format>,
+    ) -> Option<&'a rust_xlsxwriter::Format> {
+        own.map(|f| &f.0).or_else(|| {
+            tables
+                .iter()
+                .rev()
+                .find(|t| t.col == col && t.rows.contains(&row))
+                .map(|t| &t.format)
+        })
+    }
+
     fn write_row(
         &self,
         ruby: &Ruby,
@@ -736,9 +768,15 @@ impl Worksheet {
             values.push((col, CellValue::from_ruby(ruby, v)?, format.at(i)?));
             Ok(())
         })?;
+        let tables = self.table_formats.borrow();
         self.with_ws(|ws| {
             for (col, value, format) in &values {
-                value.write(ws, row, *col, *format)?;
+                value.write(
+                    ws,
+                    row,
+                    *col,
+                    Self::cell_format(&tables, row, *col, *format),
+                )?;
             }
             Ok(())
         })?;
@@ -756,7 +794,10 @@ impl Worksheet {
     ) -> Result<(), Error> {
         rb_self.check_not_flushed(ruby, row)?;
         let value = CellValue::from_ruby(ruby, v)?;
-        rb_self.with_ws(|ws| value.write(ws, row, col, format))?;
+        let tables = rb_self.table_formats.borrow();
+        rb_self.with_ws(|ws| {
+            value.write(ws, row, col, Self::cell_format(&tables, row, col, format))
+        })?;
         rb_self.advance(row);
         Ok(())
     }
@@ -896,7 +937,7 @@ impl Worksheet {
         rb_self.with_ws(|ws| {
             ws.merge_range(first_row, first_col, last_row, last_col, "", merge_format)
                 .map_err(xerr)?;
-            value.write(ws, first_row, first_col, format)
+            value.write(ws, first_row, first_col, format.map(|f| &f.0))
         })?;
         rb_self.advance(last_row);
         Ok(rb_self)
@@ -1281,10 +1322,12 @@ impl Worksheet {
         };
         // The table writes its header row, which must not be flushed yet.
         rb_self.check_not_flushed(ruby, fr)?;
+        let total_row = flag("total_row", false);
         let mut table = Table::new()
-            .set_total_row(flag("total_row", false))
+            .set_total_row(total_row)
             .set_banded_rows(flag("banded_rows", true))
             .set_autofilter(flag("autofilter", true));
+        let mut column_formats = Vec::new();
         if !opt("columns").is_nil() {
             let specs = RArray::try_convert(opt("columns"))?;
             let width = usize::from(lc.saturating_sub(fc)) + 1;
@@ -1297,10 +1340,15 @@ impl Worksheet {
                     ),
                 ));
             }
-            let columns = specs
-                .into_iter()
-                .map(|v| table_column(ruby, v))
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut columns = Vec::with_capacity(specs.len());
+            each_entry(specs, |i, v| {
+                let (column, format) = table_column(ruby, v)?;
+                columns.push(column);
+                if let Some(format) = format {
+                    column_formats.push((fc + i as u16, format));
+                }
+                Ok(())
+            })?;
             table = table.set_columns(&columns);
         }
         if !opt("style").is_nil() {
@@ -1314,6 +1362,20 @@ impl Worksheet {
                 .map(|_| ())
                 .map_err(xerr)
         })?;
+        // Data rows: under the header, above the total row.
+        let data_rows = (fr + 1)..=lr.saturating_sub(u32::from(total_row));
+        rb_self
+            .table_formats
+            .borrow_mut()
+            .extend(
+                column_formats
+                    .into_iter()
+                    .map(|(col, format)| TableColumnFormat {
+                        rows: data_rows.clone(),
+                        col,
+                        format,
+                    }),
+            );
         // Continue appending under the header, so `<<` fills the table.
         rb_self.advance(fr);
         Ok(rb_self)
