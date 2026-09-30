@@ -12,5 +12,6 @@ gem "rake-compiler"
 
 gem "minitest", "~> 5.16"
 
+gem "cgi" # roo requires cgi, which Ruby 4.0 no longer bundles
+gem "roo", "~> 3.0"
 gem "rubocop", "~> 1.21"
-gem "rubyzip", "~> 3.0"
