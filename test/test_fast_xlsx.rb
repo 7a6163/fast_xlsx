@@ -439,6 +439,17 @@ class TestFastXlsx < Minitest::Test
     assert_includes error.message, "email"
   end
 
+  def test_write_comment_with_and_without_author
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write_comment(0, 0, "Checked by finance", author: "Zac")
+    ws.write_comment(2, 1, "Estimate")
+
+    notes = comments(wb)
+    assert_equal ["Zac", "Checked by finance"], notes["A1"]
+    assert_equal "Estimate", notes["B3"].last
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

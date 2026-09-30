@@ -103,6 +103,12 @@ ws.data_validation(1, 3, 100, 3, type: :whole_number, criteria: :between, value:
 
 `type` is `:list`, `:whole_number`, `:decimal` or `:text_length`; the number types take the same `criteria` as `:cell` conditional formats.
 
+### Comments
+
+```ruby
+ws.write_comment(0, 0, "Checked by finance", author: "Zac")   # Excel shows it as a note on A1
+```
+
 Values are mapped by type:
 
 | Ruby | Excel |

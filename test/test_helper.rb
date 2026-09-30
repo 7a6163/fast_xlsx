@@ -76,6 +76,18 @@ module XlsxHelpers
     end
   end
 
+  # Comments (notes) of sheet 1 as { "A1" => [author, text] }.
+  def comments(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    return {} unless zip.find_entry("xl/comments1.xml")
+
+    xml = Nokogiri::XML(zip.read("xl/comments1.xml")).remove_namespaces!
+    authors = xml.css("authors > author").map(&:text)
+    xml.css("commentList > comment").to_h do |c|
+      [c["ref"], [authors[c["authorId"].to_i], c.css("t").map(&:text).join]]
+    end
+  end
+
   private
 
   def style_hash(styles, cell_xf)

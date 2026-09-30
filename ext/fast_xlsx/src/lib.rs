@@ -14,6 +14,8 @@ use rust_xlsxwriter::{
     IntoDataValidationValue, IntoExcelData, XlsxError,
 };
 
+use rust_xlsxwriter::Note;
+
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
     ruby.class_object()
@@ -739,6 +741,22 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn write_comment(
+        rb_self: Obj<Self>,
+        row: u32,
+        col: u16,
+        text: String,
+        author: Option<String>,
+    ) -> Result<Obj<Self>, Error> {
+        // Keep the text as written; rust_xlsxwriter would prefix "Author:\n".
+        let mut note = Note::new(text).add_author_prefix(false);
+        if let Some(author) = author {
+            note = note.set_author(author);
+        }
+        rb_self.with_ws(|ws| ws.insert_note(row, col, &note).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
     fn name(&self) -> Result<String, Error> {
         self.with_ws(|ws| Ok(ws.name()))
     }
@@ -769,6 +787,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("autofit", method!(Worksheet::autofit, 0))?;
     ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
     ws.define_method("name", method!(Worksheet::name, 0))?;
+    ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
     ws.define_method(
         "_conditional_format",
         method!(Worksheet::conditional_format, 5),

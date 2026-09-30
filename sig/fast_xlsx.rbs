@@ -61,6 +61,7 @@ module FastXlsx
                           ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
                           ?input_title: String, ?input_message: String,
                           ?error_title: String, ?error_message: String) -> self
+    def write_comment: (Integer row, Integer col, String text, ?author: String?) -> self
     def name: () -> String
     def next_row: () -> Integer
   end

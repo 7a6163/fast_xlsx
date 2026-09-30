@@ -79,6 +79,11 @@ module FastXlsx
       _data_validation(first_row, first_col, last_row, last_col, { type: type, ** })
     end
 
+    # Adds a comment (Excel "note") to a cell.
+    def write_comment(row, col, text, author: nil)
+      _write_comment(row, col, text, author)
+    end
+
     # Default format for cells in these columns that are written without one.
     def set_column_format(columns, format)
       _set_column_format(*column_bounds(columns), format)
