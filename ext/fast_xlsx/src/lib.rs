@@ -210,7 +210,16 @@ impl CellValue {
         Ok(if v.is_nil() {
             CellValue::Empty
         } else if let Some(s) = RString::from_value(v) {
-            CellValue::RubyStr(s)
+            if s.is_utf8_compatible_encoding() {
+                CellValue::RubyStr(s)
+            } else {
+                // e.g. Windows-1252 / Big5 text from a legacy CSV. Binary
+                // strings with non-ASCII bytes can't be converted and raise.
+                CellValue::Text(
+                    s.funcall::<_, _, RString>("encode", ("UTF-8",))?
+                        .to_string()?,
+                )
+            }
         } else if v.is_kind_of(ruby.class_numeric()) {
             CellValue::Number(f64::try_convert(v)?)
         } else if v.is_kind_of(ruby.class_time()) {

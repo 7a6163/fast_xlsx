@@ -26,6 +26,20 @@ class TestFastXlsx < Minitest::Test
     assert_equal [%w[hi sym]], rows(wb)
   end
 
+  # Data read from legacy CSVs is often in a non-UTF-8 encoding.
+  def test_strings_in_other_encodings_are_converted_to_utf8
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << ["caf\xE9".dup.force_encoding("ISO-8859-1"), "中文".encode("Big5"),
+                         "日本".encode("Shift_JIS"), "plain".b]
+
+    assert_equal [%w[café 中文 日本 plain]], rows(wb)
+  end
+
+  def test_binary_strings_with_non_ascii_bytes_raise
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(EncodingError) { ws << ["\xFF\xFE".b] }
+  end
+
   def test_booleans_are_written_as_booleans
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [true, false]
