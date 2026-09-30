@@ -110,6 +110,36 @@ module XlsxHelpers
     [anchors, media]
   end
 
+  # The first chart on sheet 1: plot type, series ranges, titles, and its anchor cell and size.
+  def chart(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    xml = Nokogiri::XML(zip.read("xl/charts/chart1.xml")).remove_namespaces!
+    anchor = Nokogiri::XML(zip.read("xl/drawings/drawing1.xml")).remove_namespaces!.at("twoCellAnchor")
+    plot = xml.at("plotArea").element_children.find { |e| e.name.end_with?("Chart") }
+    {
+      plot: plot.name, bar_dir: plot.at("barDir")&.[]("val"), grouping: plot.at("grouping")&.[]("val"),
+      series: plot.css("ser").map { |s| %w[tx cat val].map { |part| s.at("#{part} f, #{part} v")&.text } },
+      title: rich_text(xml.at("chart > title")),
+      axis_titles: xml.css("catAx, valAx").map { |ax| rich_text(ax.at("title")) },
+      anchor: [anchor.at("from col").text.to_i, anchor.at("from row").text.to_i],
+      size: anchor_size(anchor)
+    }
+  end
+
+  # Text of a chart title element, nil when there is no title.
+  def rich_text(node)
+    node && node.css("t").map(&:text).join
+  end
+
+  # Pixel size of a two-cell anchor, assuming default 64px columns and 20px rows.
+  def anchor_size(anchor)
+    corner = ->(tag) { %w[col colOff row rowOff].map { |part| anchor.at("#{tag} #{part}").text.to_i } }
+    from_col, from_col_off, from_row, from_row_off = corner.call("from")
+    to_col, to_col_off, to_row, to_row_off = corner.call("to")
+    [((to_col - from_col) * 64) + ((to_col_off - from_col_off) / 9525),
+     ((to_row - from_row) * 20) + ((to_row_off - from_row_off) / 9525)]
+  end
+
   private
 
   def style_hash(styles, cell_xf)

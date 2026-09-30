@@ -14,7 +14,7 @@ use rust_xlsxwriter::{
     IntoDataValidationValue, IntoExcelData, XlsxError,
 };
 
-use rust_xlsxwriter::{Image, Note};
+use rust_xlsxwriter::{Chart, ChartType, Image, Note};
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
@@ -297,6 +297,21 @@ fn validation_rule<T: TryConvert + IntoDataValidationValue>(
     let cmp = comparison(ruby, "validation criteria", criteria, value)?;
     Ok(comparison_rule!(DataValidationRule, cmp, T::try_convert))
 }
+
+const CHART_TYPES: &[(&str, ChartType)] = &[
+    ("area", ChartType::Area),
+    ("area_stacked", ChartType::AreaStacked),
+    ("bar", ChartType::Bar),
+    ("bar_stacked", ChartType::BarStacked),
+    ("column", ChartType::Column),
+    ("column_stacked", ChartType::ColumnStacked),
+    ("line", ChartType::Line),
+    ("line_stacked", ChartType::LineStacked),
+    ("pie", ChartType::Pie),
+    ("doughnut", ChartType::Doughnut),
+    ("radar", ChartType::Radar),
+    ("scatter", ChartType::Scatter),
+];
 
 const BORDERS: &[(&str, FormatBorder)] = &[
     ("thin", FormatBorder::Thin),
@@ -793,6 +808,63 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn insert_chart(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        row: u32,
+        col: u16,
+        options: RHash,
+    ) -> Result<Obj<Self>, Error> {
+        let nil = ruby.qnil().as_value();
+        let arg_error = |msg: String| Error::new(ruby.exception_arg_error(), msg);
+        let text = |v: Value| -> Result<Option<String>, Error> {
+            if v.is_nil() {
+                Ok(None)
+            } else {
+                String::try_convert(v).map(Some)
+            }
+        };
+        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+
+        let mut chart = Chart::new(choice(ruby, "chart type", opt("type"), CHART_TYPES)?);
+        let series = RArray::try_convert(opt("series"))?;
+        if series.is_empty() {
+            return Err(arg_error(
+                "series: needs at least one { values:, categories:, name: } hash".into(),
+            ));
+        }
+        for s in series.into_iter() {
+            let s = RHash::try_convert(s)?;
+            let get = |name: &str| s.get(ruby.to_symbol(name)).unwrap_or(nil);
+            let values = text(get("values"))?
+                .ok_or_else(|| arg_error(format!("series {} needs values:", s.inspect())))?;
+            let cs = chart.add_series().set_values(values.as_str());
+            if let Some(categories) = text(get("categories"))? {
+                cs.set_categories(categories.as_str());
+            }
+            if let Some(name) = text(get("name"))? {
+                cs.set_name(name.as_str());
+            }
+        }
+        if let Some(title) = text(opt("title"))? {
+            chart.title().set_name(title.as_str());
+        }
+        if let Some(name) = text(opt("x_axis"))? {
+            chart.x_axis().set_name(name.as_str());
+        }
+        if let Some(name) = text(opt("y_axis"))? {
+            chart.y_axis().set_name(name.as_str());
+        }
+        if !opt("width").is_nil() {
+            chart.set_width(u32::try_convert(opt("width"))?);
+        }
+        if !opt("height").is_nil() {
+            chart.set_height(u32::try_convert(opt("height"))?);
+        }
+        rb_self.with_ws(|ws| ws.insert_chart(row, col, &chart).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
     fn name(&self) -> Result<String, Error> {
         self.with_ws(|ws| Ok(ws.name()))
     }
@@ -825,6 +897,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("name", method!(Worksheet::name, 0))?;
     ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
     ws.define_method("_insert_image", method!(Worksheet::insert_image, 4))?;
+    ws.define_method("_insert_chart", method!(Worksheet::insert_chart, 3))?;
     ws.define_method(
         "_conditional_format",
         method!(Worksheet::conditional_format, 5),

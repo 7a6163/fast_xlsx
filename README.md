@@ -4,7 +4,7 @@
 
 Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
-> **Status: early.** Column formats, freeze panes, merged cells and charts are not implemented yet.
+> **Status: early.** The API may still change before 1.0.
 
 ## Usage
 
@@ -117,6 +117,21 @@ ws.insert_image(0, 5, blob.download, scale: 0.5, x_offset: 10, y_offset: 4, alt_
 ```
 
 The source is a file path or any IO responding to `#read` (PNG, JPEG, GIF or BMP). Offsets are in pixels. Data that is not a supported image raises `FastXlsx::Error`.
+
+### Charts
+
+```ruby
+ws.concat([%w[Month Sales Costs], ["Jan", 10, 7], ["Feb", 25, 12], ["Mar", 18, 11]])
+
+ws.insert_chart(1, 4, type: :column,
+                series: [
+                  { name: "Sales", categories: "Sheet1!$A$2:$A$4", values: "Sheet1!$B$2:$B$4" },
+                  { name: "Costs", categories: "Sheet1!$A$2:$A$4", values: "Sheet1!$C$2:$C$4" }
+                ],
+                title: "Q1", x_axis: "Month", y_axis: "Amount", width: 600, height: 360)
+```
+
+`type`: `:column`, `:column_stacked`, `:bar`, `:bar_stacked`, `:line`, `:line_stacked`, `:area`, `:area_stacked`, `:pie`, `:doughnut`, `:radar`, `:scatter`. Ranges use Excel syntax, so a chart can plot data from another worksheet. Sizes are in pixels (default 480 × 288).
 
 Values are mapped by type:
 

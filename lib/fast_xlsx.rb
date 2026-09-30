@@ -92,6 +92,13 @@ module FastXlsx
       _insert_image(row, col, bytes, { ** })
     end
 
+    # Inserts a chart with its top-left corner in the cell. series is an Array
+    # of { values:, categories:, name: } with Excel ranges such as
+    # "Sheet1!$B$2:$B$13". Options: title:, x_axis:, y_axis:, width:, height:.
+    def insert_chart(row, col, type:, series:, **)
+      _insert_chart(row, col, { type: type, series: series, ** })
+    end
+
     # Default format for cells in these columns that are written without one.
     def set_column_format(columns, format)
       _set_column_format(*column_bounds(columns), format)

@@ -18,3 +18,4 @@
 - `Worksheet#data_validation` (dropdown lists, whole number, decimal and text length rules, input/error messages)
 - `Worksheet#write_comment` (Excel notes, optional author)
 - `Worksheet#insert_image` from a path or IO, with scale, offsets and alt text
+- `Worksheet#insert_chart` (column, bar, line, area, stacked variants, pie, doughnut, radar, scatter) with titles, axis names and size

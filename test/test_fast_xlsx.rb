@@ -479,6 +479,49 @@ class TestFastXlsx < Minitest::Test
     assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new("not an image")) }
   end
 
+  SALES = [%w[Month Sales], ["Jan", 10], ["Feb", 25], ["Mar", 18]].freeze
+  SALES_SERIES = { name: "Sales", categories: "Sheet1!$A$2:$A$4", values: "Sheet1!$B$2:$B$4" }.freeze
+
+  def test_insert_chart_places_a_column_chart_with_its_series
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet.concat(SALES)
+    ws.insert_chart(1, 3, type: :column, series: [SALES_SERIES], width: 600, height: 360)
+
+    c = chart(wb)
+    assert_equal %w[barChart col], c.values_at(:plot, :bar_dir)
+    assert_equal [["Sales", "Sheet1!$A$2:$A$4", "Sheet1!$B$2:$B$4"]], c[:series]
+    assert_equal [3, 1], c[:anchor]
+    assert_equal [600, 360], c[:size]
+  end
+
+  def test_insert_chart_titles
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.concat(SALES).insert_chart(0, 3, type: :line, series: [SALES_SERIES],
+                                                      title: "Monthly sales", x_axis: "Month", y_axis: "Amount")
+
+    c = chart(wb)
+    assert_equal ["lineChart", "Monthly sales", %w[Month Amount]], c.values_at(:plot, :title, :axis_titles)
+  end
+
+  def test_insert_chart_types
+    {
+      bar: %w[barChart bar clustered], column_stacked: %w[barChart col stacked],
+      pie: ["pieChart", nil, nil], area: ["areaChart", nil, "standard"]
+    }.each do |type, expected|
+      wb = FastXlsx::Workbook.new
+      wb.add_worksheet.concat(SALES).insert_chart(0, 3, type: type, series: [SALES_SERIES])
+
+      assert_equal expected, chart(wb).values_at(:plot, :bar_dir, :grouping), type
+    end
+  end
+
+  def test_insert_chart_rejects_unknown_type_and_missing_series
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.insert_chart(0, 0, type: :bubble_tea, series: [SALES_SERIES]) }
+    assert_includes error.message, "bubble_tea"
+    assert_raises(ArgumentError) { ws.insert_chart(0, 0, type: :column, series: []) }
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

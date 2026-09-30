@@ -68,6 +68,11 @@ module FastXlsx
     def write_comment: (Integer row, Integer col, String text, ?author: String?) -> self
     def insert_image: (Integer row, Integer col, String | _Reader source, ?scale: Numeric,
                        ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
+    type chart_series = { values: String, ?categories: String, ?name: String }
+
+    def insert_chart: (Integer row, Integer col, type: Symbol, series: Array[chart_series],
+                       ?title: String, ?x_axis: String, ?y_axis: String,
+                       ?width: Integer, ?height: Integer) -> self
     def name: () -> String
     def next_row: () -> Integer
   end
