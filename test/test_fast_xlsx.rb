@@ -205,6 +205,32 @@ class TestFastXlsx < Minitest::Test
     assert cell_style(wb, "A1")[:text_wrap]
   end
 
+  def test_border_on_all_sides
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(border: :thin))
+
+    assert_equal({ left: "thin", right: "thin", top: "thin", bottom: "thin" }, cell_style(wb, "A1")[:border])
+  end
+
+  def test_border_per_side
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(border_bottom: :double, border_left: :dashed))
+
+    assert_equal({ left: "dashed", right: nil, top: nil, bottom: "double" }, cell_style(wb, "A1")[:border])
+  end
+
+  def test_border_side_wins_over_border_regardless_of_order
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", FastXlsx::Format.new(border_left: :thick, border: :thin))
+
+    assert_equal({ left: "thick", right: "thin", top: "thin", bottom: "thin" }, cell_style(wb, "A1")[:border])
+  end
+
+  def test_invalid_border_raises
+    error = assert_raises(ArgumentError) { FastXlsx::Format.new(border: :bold) }
+    assert_includes error.message, "bold"
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

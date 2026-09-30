@@ -57,6 +57,8 @@ module FastXlsx
   # Cell style, e.g. Format.new(bold: true). Pass to Worksheet#write.
   class Format
     def self.new(**options)
+      # Apply border: first so border_left: etc. override it whatever the order.
+      options = { border: options[:border], **options.except(:border) } if options.key?(:border)
       _new(options)
     end
   end

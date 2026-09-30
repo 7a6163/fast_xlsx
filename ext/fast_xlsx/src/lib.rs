@@ -6,7 +6,9 @@ use magnus::{
     ExceptionClass, Integer, RArray, RClass, RHash, RModule, RString, Ruby, Symbol, TryConvert,
     Value,
 };
-use rust_xlsxwriter::{Color, FormatAlign, FormatUnderline, IntoExcelData, XlsxError};
+use rust_xlsxwriter::{
+    Color, FormatAlign, FormatBorder, FormatUnderline, IntoExcelData, XlsxError,
+};
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
 fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
@@ -197,6 +199,16 @@ fn choice<T: Clone>(
         })
 }
 
+const BORDERS: &[(&str, FormatBorder)] = &[
+    ("thin", FormatBorder::Thin),
+    ("medium", FormatBorder::Medium),
+    ("thick", FormatBorder::Thick),
+    ("dashed", FormatBorder::Dashed),
+    ("dotted", FormatBorder::Dotted),
+    ("double", FormatBorder::Double),
+    ("hair", FormatBorder::Hair),
+];
+
 #[magnus::wrap(class = "FastXlsx::Format", free_immediately)]
 struct Format(rust_xlsxwriter::Format);
 
@@ -235,6 +247,11 @@ impl Format {
                     ],
                 )?),
                 "text_wrap" if value.to_bool() => taken.set_text_wrap(),
+                "border" => taken.set_border(choice(ruby, "border", value, BORDERS)?),
+                "border_left" => taken.set_border_left(choice(ruby, "border", value, BORDERS)?),
+                "border_right" => taken.set_border_right(choice(ruby, "border", value, BORDERS)?),
+                "border_top" => taken.set_border_top(choice(ruby, "border", value, BORDERS)?),
+                "border_bottom" => taken.set_border_bottom(choice(ruby, "border", value, BORDERS)?),
                 "bold" | "italic" | "underline" | "text_wrap" => taken,
                 other => {
                     return Err(Error::new(

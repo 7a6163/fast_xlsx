@@ -4,7 +4,7 @@
 
 Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
-> **Status: early.** Formats support bold / italic / underline / number formats only; colors, alignment, borders, column formats and charts are not implemented yet.
+> **Status: early.** Column formats, freeze panes, merged cells and charts are not implemented yet.
 
 ## Usage
 
@@ -24,14 +24,25 @@ wb.save("report.xlsx")                            # or wb.to_xlsx => binary Stri
 ### Formats
 
 ```ruby
-header = FastXlsx::Format.new(bold: true, underline: true)
+header = FastXlsx::Format.new(bold: true, bg_color: "#DDEBF7", border_bottom: :thin, align: :center)
 date   = FastXlsx::Format.new(num_format: "yyyy-mm-dd")
 
 ws.append(["id", "name", "created_at"], format: header)  # format every cell in the row
 ws.write(1, 2, Date.today, date)                         # format one cell
 ```
 
-Options: `bold`, `italic`, `underline` (booleans) and `num_format` (Excel number format string). Unknown options raise `ArgumentError`.
+| Option | Values |
+|---|---|
+| `bold`, `italic`, `underline`, `text_wrap` | `true` / `false` |
+| `font_size` | number, e.g. `14` |
+| `font_name` | e.g. `"Arial"` |
+| `font_color`, `bg_color` | `"#RRGGBB"` or `0xRRGGBB` |
+| `num_format` | Excel number format, e.g. `"#,##0.00"`, `"yyyy-mm-dd"` |
+| `align` | `:left`, `:center`, `:right` |
+| `valign` | `:top`, `:center`, `:bottom` |
+| `border`, `border_left`, `border_right`, `border_top`, `border_bottom` | `:thin`, `:medium`, `:thick`, `:dashed`, `:dotted`, `:double`, `:hair` |
+
+Per-side borders override `border`. Unknown options and invalid values raise `ArgumentError`.
 
 ### Columns and filters
 
