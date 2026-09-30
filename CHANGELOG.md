@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Precompiled (platform) gems failed to `require`: the extension was only looked up where a source install puts it, not in the per-Ruby-version directory that platform gems use. 0.1.0 is yanked; upgrade to 0.1.1.
+- Precompiled (platform) gems failed to `require`: the extension was only looked up where a source install puts it, not in the per-Ruby-version directory that platform gems use. 0.1.0's platform gems cannot be loaded; upgrade to 0.1.1 (`bundle update fast_xlsx` if your lockfile has 0.1.0).
 
 ### Changed
 
