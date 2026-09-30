@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-30
+
 First release: a fast `.xlsx` writer built on rust_xlsxwriter. Early API; it may still change before 1.0.
 
 ### Workbooks and worksheets
