@@ -17,3 +17,7 @@ Metrics:
 Style/ConcatArrayLiterals:
   Exclude:
     - test/**/*
+
+# Range methods take four coordinates (first_row, first_col, last_row, last_col) plus a value or options.
+Metrics/ParameterLists:
+  Max: 6

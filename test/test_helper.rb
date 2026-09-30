@@ -48,6 +48,21 @@ module XlsxHelpers
     style_hash(styles, xf)
   end
 
+  # Conditional formatting rules of sheet 1, with the differential format (dxf) they apply.
+  def conditional_formats(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    sheet = Nokogiri::XML(zip.read("xl/worksheets/sheet1.xml")).remove_namespaces!
+    dxfs = Nokogiri::XML(zip.read("xl/styles.xml")).remove_namespaces!.css("dxfs > dxf")
+    sheet.css("worksheet > conditionalFormatting > cfRule").map do |rule| # skips the x14 extLst copies
+      dxf = rule["dxfId"] && dxfs[rule["dxfId"].to_i]
+      {
+        sqref: rule.parent["sqref"], type: rule["type"], operator: rule["operator"], text: rule["text"],
+        formulas: rule.css("formula").map(&:text), stops: rule.css("cfvo").size,
+        font_color: dxf&.at("font > color")&.[]("rgb")
+      }
+    end
+  end
+
   private
 
   def style_hash(styles, cell_xf)

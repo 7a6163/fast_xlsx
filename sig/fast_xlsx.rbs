@@ -52,6 +52,10 @@ module FastXlsx
     def freeze_panes: (Integer row, Integer col) -> self
     def set_row_height: (Integer row, Numeric height) -> self
     def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?Format? format) -> self
+    def conditional_format: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
+                             type: :cell | :text | :formula | :data_bar | :color_scale,
+                             ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
+                             ?format: Format, ?colors: 2 | 3) -> self
     def name: () -> String
     def next_row: () -> Integer
   end

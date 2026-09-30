@@ -339,6 +339,62 @@ class TestFastXlsx < Minitest::Test
     assert_equal %w[FFFF0000] * 4, cell_style(wb, "A1")[:border_color].values
   end
 
+  def test_conditional_format_cell_rule_with_format
+    wb = FastXlsx::Workbook.new
+    red = FastXlsx::Format.new(font_color: "#FF0000")
+    wb.add_worksheet.conditional_format(0, 1, 9, 1, type: :cell, criteria: :<, value: 0, format: red)
+
+    rule = conditional_formats(wb).first
+    assert_equal ["B1:B10", "cellIs", "lessThan", ["0"], "FFFF0000"],
+                 rule.values_at(:sqref, :type, :operator, :formulas, :font_color)
+  end
+
+  def test_conditional_format_cell_between_takes_two_values
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.conditional_format(0, 0, 0, 0, type: :cell, criteria: :between, value: [1, 10],
+                                                    format: FastXlsx::Format.new(bold: true))
+
+    assert_equal ["between", %w[1 10]], conditional_formats(wb).first.values_at(:operator, :formulas)
+  end
+
+  def test_conditional_format_text_contains
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.conditional_format(0, 0, 9, 0, type: :text, criteria: :contains, value: "error",
+                                                    format: FastXlsx::Format.new(bold: true))
+
+    assert_equal %w[containsText containsText error],
+                 conditional_formats(wb).first.values_at(:type, :operator, :text)
+  end
+
+  def test_conditional_format_formula
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.conditional_format(0, 0, 9, 3, type: :formula, value: "=$D1>100",
+                                                    format: FastXlsx::Format.new(bold: true))
+
+    assert_equal ["A1:D10", "expression", ["$D1>100"]],
+                 conditional_formats(wb).first.values_at(:sqref, :type, :formulas)
+  end
+
+  def test_conditional_format_data_bar_and_color_scales
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format(0, 0, 9, 0, type: :data_bar)
+    ws.conditional_format(0, 1, 9, 1, type: :color_scale)
+    ws.conditional_format(0, 2, 9, 2, type: :color_scale, colors: 2)
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[dataBar colorScale colorScale], rules.map { |r| r[:type] })
+    assert_equal([3, 2], rules.drop(1).map { |r| r[:stops] })
+  end
+
+  def test_conditional_format_rejects_unknown_type_and_criteria
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.conditional_format(0, 0, 0, 0, type: :sparkle) }
+    assert_includes error.message, "sparkle"
+    error = assert_raises(ArgumentError) { ws.conditional_format(0, 0, 0, 0, type: :cell, criteria: :~, value: 1) }
+    assert_includes error.message, "~"
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

@@ -70,6 +70,27 @@ ws.set_row_height(0, 30)                       # row 1, height in points
 ws.merge_range(0, 0, 0, 3, "Q3 report", title) # merge A1:D1; the value can be any cell type
 ```
 
+### Conditional formats
+
+```ruby
+red = FastXlsx::Format.new(font_color: "#9C0006", bg_color: "#FFC7CE")
+
+# rows 1–100 of column B (first_row, first_col, last_row, last_col)
+ws.conditional_format(0, 1, 99, 1, type: :cell, criteria: :<, value: 0, format: red)
+ws.conditional_format(0, 1, 99, 1, type: :cell, criteria: :between, value: [1, 10], format: red)
+ws.conditional_format(0, 0, 99, 0, type: :text, criteria: :contains, value: "error", format: red)
+ws.conditional_format(0, 0, 99, 3, type: :formula, value: "=$D1>100", format: red)
+ws.conditional_format(0, 2, 99, 2, type: :data_bar)
+ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; colors: 2 for 2-color
+```
+
+| `type` | `criteria` | `value` |
+|---|---|---|
+| `:cell` | `:==`, `:!=`, `:>`, `:>=`, `:<`, `:<=`, `:between`, `:not_between` | number or string; `[min, max]` for the range criteria |
+| `:text` | `:contains`, `:not_contains`, `:begins_with`, `:ends_with` | string |
+| `:formula` | — | formula string, relative to the top-left cell |
+| `:data_bar`, `:color_scale` | — | — |
+
 Values are mapped by type:
 
 | Ruby | Excel |

@@ -14,3 +14,4 @@
 - `Worksheet#freeze_panes`, `#set_row_height` and `#merge_range`
 - `Workbook#worksheet(name)`, `Workbook#worksheets` and `Worksheet#name`
 - Format options `strikeout`, `font_script`, `rotation`, `indent`, `shrink`, `border_color` and underline styles
+- `Worksheet#conditional_format` (cell, text, formula, data bar and color scale rules)

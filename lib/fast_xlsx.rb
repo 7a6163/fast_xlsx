@@ -63,8 +63,14 @@ module FastXlsx
     end
 
     # Merges the range and writes value (any cell type) into its first cell.
-    def merge_range(first_row, first_col, last_row, last_col, value, format = nil) # rubocop:disable Metrics/ParameterLists
+    def merge_range(first_row, first_col, last_row, last_col, value, format = nil)
       _merge_range(first_row, first_col, last_row, last_col, value, format)
+    end
+
+    # Highlights cells in the range by rule. type: :cell, :text, :formula,
+    # :data_bar or :color_scale; see the README for each type's options.
+    def conditional_format(first_row, first_col, last_row, last_col, type:, **)
+      _conditional_format(first_row, first_col, last_row, last_col, { type: type, ** })
     end
 
     # Default format for cells in these columns that are written without one.

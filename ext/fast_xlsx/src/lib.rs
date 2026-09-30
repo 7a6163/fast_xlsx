@@ -7,7 +7,10 @@ use magnus::{
     Value,
 };
 use rust_xlsxwriter::{
-    Color, FormatAlign, FormatBorder, FormatScript, FormatUnderline, IntoExcelData, XlsxError,
+    Color, ConditionalFormat2ColorScale, ConditionalFormat3ColorScale, ConditionalFormatCell,
+    ConditionalFormatCellRule, ConditionalFormatDataBar, ConditionalFormatFormula,
+    ConditionalFormatText, ConditionalFormatTextRule, ConditionalFormatValue, FormatAlign,
+    FormatBorder, FormatScript, FormatUnderline, IntoExcelData, XlsxError,
 };
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
@@ -197,6 +200,74 @@ fn choice<T: Clone>(
                 ),
             )
         })
+}
+
+// A number or string compared against in a conditional format rule.
+fn cf_value(ruby: &Ruby, v: Value) -> Result<ConditionalFormatValue, Error> {
+    if let Some(s) = RString::from_value(v) {
+        Ok(s.to_string()?.into())
+    } else if v.is_kind_of(ruby.class_numeric()) {
+        Ok(f64::try_convert(v)?.into())
+    } else {
+        Err(Error::new(
+            ruby.exception_arg_error(),
+            format!(
+                "invalid conditional format value {}: use a number or string",
+                v.inspect()
+            ),
+        ))
+    }
+}
+
+fn cell_rule(
+    ruby: &Ruby,
+    criteria: Value,
+    value: Value,
+) -> Result<ConditionalFormatCellRule<ConditionalFormatValue>, Error> {
+    use ConditionalFormatCellRule as Rule;
+    let op = choice(
+        ruby,
+        "cell criteria",
+        criteria,
+        &[
+            ("==", "=="),
+            ("!=", "!="),
+            (">", ">"),
+            (">=", ">="),
+            ("<", "<"),
+            ("<=", "<="),
+            ("between", "between"),
+            ("not_between", "not_between"),
+        ],
+    )?;
+    if op == "between" || op == "not_between" {
+        let bounds = RArray::from_value(value)
+            .filter(|a| a.len() == 2)
+            .ok_or_else(|| {
+                Error::new(
+                    ruby.exception_arg_error(),
+                    format!("{op} needs value: [min, max], got {}", value.inspect()),
+                )
+            })?;
+        let (min, max) = (
+            cf_value(ruby, bounds.entry(0)?)?,
+            cf_value(ruby, bounds.entry(1)?)?,
+        );
+        return Ok(if op == "between" {
+            Rule::Between(min, max)
+        } else {
+            Rule::NotBetween(min, max)
+        });
+    }
+    let v = cf_value(ruby, value)?;
+    Ok(match op {
+        "==" => Rule::EqualTo(v),
+        "!=" => Rule::NotEqualTo(v),
+        ">" => Rule::GreaterThan(v),
+        ">=" => Rule::GreaterThanOrEqualTo(v),
+        "<" => Rule::LessThan(v),
+        _ => Rule::LessThanOrEqualTo(v),
+    })
 }
 
 const BORDERS: &[(&str, FormatBorder)] = &[
@@ -475,6 +546,115 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn conditional_format(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        fr: u32,
+        fc: u16,
+        lr: u32,
+        lc: u16,
+        options: RHash,
+    ) -> Result<Obj<Self>, Error> {
+        let nil = ruby.qnil().as_value();
+        let opt = |name: &str| options.get(ruby.to_symbol(name)).unwrap_or(nil);
+        let format = Option::<&Format>::try_convert(opt("format"))?;
+        let value = opt("value");
+        let kind = choice(
+            ruby,
+            "conditional format type",
+            opt("type"),
+            &[
+                ("cell", "cell"),
+                ("text", "text"),
+                ("formula", "formula"),
+                ("data_bar", "data_bar"),
+                ("color_scale", "color_scale"),
+            ],
+        )?;
+        rb_self.with_ws(|ws| {
+            let r = match kind {
+                "cell" => {
+                    let mut cf = ConditionalFormatCell::new().set_rule(cell_rule(
+                        ruby,
+                        opt("criteria"),
+                        value,
+                    )?);
+                    if let Some(f) = format {
+                        cf = cf.set_format(&f.0);
+                    }
+                    ws.add_conditional_format(fr, fc, lr, lc, &cf)
+                }
+                "text" => {
+                    let text = String::try_convert(value)?;
+                    let rule = match choice(
+                        ruby,
+                        "text criteria",
+                        opt("criteria"),
+                        &[
+                            ("contains", 0),
+                            ("not_contains", 1),
+                            ("begins_with", 2),
+                            ("ends_with", 3),
+                        ],
+                    )? {
+                        0 => ConditionalFormatTextRule::Contains(text),
+                        1 => ConditionalFormatTextRule::DoesNotContain(text),
+                        2 => ConditionalFormatTextRule::BeginsWith(text),
+                        _ => ConditionalFormatTextRule::EndsWith(text),
+                    };
+                    let mut cf = ConditionalFormatText::new().set_rule(rule);
+                    if let Some(f) = format {
+                        cf = cf.set_format(&f.0);
+                    }
+                    ws.add_conditional_format(fr, fc, lr, lc, &cf)
+                }
+                "formula" => {
+                    let mut cf = ConditionalFormatFormula::new()
+                        .set_rule(String::try_convert(value)?.as_str());
+                    if let Some(f) = format {
+                        cf = cf.set_format(&f.0);
+                    }
+                    ws.add_conditional_format(fr, fc, lr, lc, &cf)
+                }
+                "data_bar" => {
+                    ws.add_conditional_format(fr, fc, lr, lc, &ConditionalFormatDataBar::new())
+                }
+                _ => {
+                    let colors = if opt("colors").is_nil() {
+                        3
+                    } else {
+                        u8::try_convert(opt("colors"))?
+                    };
+                    match colors {
+                        2 => ws.add_conditional_format(
+                            fr,
+                            fc,
+                            lr,
+                            lc,
+                            &ConditionalFormat2ColorScale::new(),
+                        ),
+                        3 => ws.add_conditional_format(
+                            fr,
+                            fc,
+                            lr,
+                            lc,
+                            &ConditionalFormat3ColorScale::new(),
+                        ),
+                        n => {
+                            return Err(Error::new(
+                                ruby.exception_arg_error(),
+                                format!("invalid colors {n}: use 2 or 3"),
+                            ))
+                        }
+                    }
+                }
+            };
+            r.map(|_| ()).map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
     fn name(&self) -> Result<String, Error> {
         self.with_ws(|ws| Ok(ws.name()))
     }
@@ -505,6 +685,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("autofit", method!(Worksheet::autofit, 0))?;
     ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
     ws.define_method("name", method!(Worksheet::name, 0))?;
+    ws.define_method(
+        "_conditional_format",
+        method!(Worksheet::conditional_format, 5),
+    )?;
     ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
     ws.define_method("set_row_height", method!(Worksheet::set_row_height, 2))?;
     ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;
