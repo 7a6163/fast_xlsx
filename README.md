@@ -278,7 +278,14 @@ Rebuild in a clean shell afterwards (`rm -rf tmp && bundle exec rake compile`) s
 
 ### Releasing
 
-Bump `FastXlsx::VERSION`, update `CHANGELOG.md`, commit, then push a matching tag:
+First generate the showcase workbook and open it in Excel to check every feature renders (the test suite only inspects the XML):
+
+```bash
+bundle exec rake compile
+ruby -Ilib examples/showcase.rb showcase.xlsx
+```
+
+Then bump `FastXlsx::VERSION`, update `CHANGELOG.md`, commit, and push a matching tag:
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0

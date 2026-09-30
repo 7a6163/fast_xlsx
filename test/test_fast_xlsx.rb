@@ -878,6 +878,17 @@ class TestFastXlsx < Minitest::Test
     assert_includes error.message, "titel"
   end
 
+  def test_showcase_example_builds_one_sheet_per_feature
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "showcase.xlsx")
+      example = File.expand_path("../examples/showcase.rb", __dir__)
+      assert system(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), example, path), "showcase.rb failed"
+
+      assert_equal %w[Values Formats Layout Conditional Validation Table Chart Media Printing],
+                   Roo::Excelx.new(path).sheets
+    end
+  end
+
   def test_save_writes_a_readable_file
     Dir.mktmpdir do |dir|
       path = File.join(dir, "out.xlsx")

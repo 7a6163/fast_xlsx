@@ -12,11 +12,13 @@ Style/StringLiteralsInInterpolation:
 Metrics:
   Exclude:
     - test/**/*
+    - examples/**/*
 
 # Worksheet#concat is not Array#concat.
 Style/ConcatArrayLiterals:
   Exclude:
     - test/**/*
+    - examples/**/*
 
 # Range methods take four coordinates (first_row, first_col, last_row, last_col) plus a value or options.
 Metrics/ParameterLists:
