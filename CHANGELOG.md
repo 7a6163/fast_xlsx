@@ -10,3 +10,4 @@
 - `Worksheet#set_column_width`, `#autofit` and `#autofilter`
 - Format options `font_size`, `font_name`, `font_color`, `bg_color`, `align`, `valign`, `text_wrap` and borders
 - `Worksheet#append(values, format: [...])` takes one format per cell
+- `Worksheet#set_column_format` for column default formats

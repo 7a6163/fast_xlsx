@@ -241,6 +241,18 @@ class TestFastXlsx < Minitest::Test
     assert_equal [["a", 1, "c"]], rows(wb)
   end
 
+  def test_column_format_applies_to_cells_written_without_a_format
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.set_column_format(1..2, FastXlsx::Format.new(num_format: "#,##0.00"))
+    ws << ["a", 1234.5, 2]
+
+    xlsx = open_xlsx(wb)
+    assert_equal "General", xlsx.excelx_format(1, 1)
+    assert_equal "#,##0.00", xlsx.excelx_format(1, 2)
+    assert_equal "#,##0.00", xlsx.excelx_format(1, 3)
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

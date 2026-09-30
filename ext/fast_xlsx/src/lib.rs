@@ -374,6 +374,14 @@ impl Worksheet {
         })
     }
 
+    fn set_column_format(&self, first: u16, last: u16, format: &Format) -> Result<(), Error> {
+        self.with_ws(|ws| {
+            ws.set_column_range_format(first, last, &format.0)
+                .map(|_| ())
+                .map_err(xerr)
+        })
+    }
+
     fn autofilter(
         rb_self: Obj<Self>,
         first_row: u32,
@@ -416,6 +424,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("_write", method!(Worksheet::write, 4))?;
     ws.define_method("_append", method!(Worksheet::append, 2))?;
     ws.define_method("_set_column_width", method!(Worksheet::set_column_width, 3))?;
+    ws.define_method(
+        "_set_column_format",
+        method!(Worksheet::set_column_format, 3),
+    )?;
     ws.define_method("autofit", method!(Worksheet::autofit, 0))?;
     ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
 

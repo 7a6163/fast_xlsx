@@ -48,9 +48,20 @@ module FastXlsx
 
     # columns: a 0-based column index or a Range of them. width is in characters.
     def set_column_width(columns, width)
-      columns = columns..columns if columns.is_a?(Integer)
-      _set_column_width(columns.min, columns.max, width)
+      _set_column_width(*column_bounds(columns), width)
       self
+    end
+
+    # Default format for cells in these columns that are written without one.
+    def set_column_format(columns, format)
+      _set_column_format(*column_bounds(columns), format)
+      self
+    end
+
+    private
+
+    def column_bounds(columns)
+      columns.is_a?(Integer) ? [columns, columns] : columns.minmax
     end
   end
 
