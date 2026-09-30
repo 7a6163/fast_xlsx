@@ -4,7 +4,7 @@ module FastXlsx
   class Error < StandardError
   end
 
-  type cell = Numeric | String | Time | bool | nil | _ToS
+  type cell = Numeric | String | Time | Date | bool | nil | _ToS
 
   class Workbook
     def self.new: (?constant_memory: bool) -> Workbook

@@ -77,6 +77,14 @@ fn excel_time(v: Value) -> Result<f64, Error> {
     Ok((secs + offset as f64) / 86400.0 + 25569.0)
 }
 
+// Date / DateTime: Julian day and day fraction are both in the object's own
+// offset. JD 2415019 is Excel serial 0 (1899-12-30).
+fn excel_date(v: Value) -> Result<f64, Error> {
+    let jd: i64 = v.funcall("jd", ())?;
+    let fraction: f64 = f64::try_convert(v.funcall("day_fraction", ())?)?;
+    Ok((jd - 2_415_019) as f64 + fraction)
+}
+
 fn put(
     ruby: &Ruby,
     ws: &mut rust_xlsxwriter::Worksheet,
@@ -95,6 +103,8 @@ fn put(
         ws.write_number(row, col, excel_time(v)?)
     } else if v.is_kind_of(ruby.class_true_class()) || v.is_kind_of(ruby.class_false_class()) {
         ws.write_boolean(row, col, v.to_bool())
+    } else if v.respond_to("jd", false)? {
+        ws.write_number(row, col, excel_date(v)?)
     } else {
         let s: String = v.funcall("to_s", ())?;
         ws.write_string(row, col, s)

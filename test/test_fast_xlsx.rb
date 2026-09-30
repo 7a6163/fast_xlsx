@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "date"
 require "tmpdir"
 
 class TestFastXlsx < Minitest::Test
@@ -44,6 +45,21 @@ class TestFastXlsx < Minitest::Test
 
     # 2000-01-01 is serial 36526 in the 1900 date system; noon adds 0.5.
     assert_equal [[36_526.5]], rows(wb)
+  end
+
+  def test_date_is_written_as_excel_serial_number
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [Date.new(2000, 1, 1)]
+
+    assert_equal [[36_526]], rows(wb)
+  end
+
+  def test_datetime_uses_its_own_wall_clock_time
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [DateTime.new(2000, 1, 1, 18, 0, 0, "+08:00")]
+
+    # 18:00 local = 0.75 of a day, regardless of the +08:00 offset.
+    assert_equal [[36_526.75]], rows(wb)
   end
 
   def test_append_continues_after_last_written_row

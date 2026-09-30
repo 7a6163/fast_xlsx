@@ -26,6 +26,7 @@ Values are mapped by type:
 | `Integer`, `Float`, any `Numeric` | number |
 | `String` | string |
 | `Time` | number (Excel serial date, local time) |
+| `Date`, `DateTime` | number (Excel serial date, own offset) |
 | `true` / `false` | boolean |
 | `nil` | empty cell |
 | anything else | `to_s` as string |

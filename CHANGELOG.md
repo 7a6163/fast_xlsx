@@ -2,4 +2,4 @@
 
 - `Workbook` / `Worksheet` with `<<`, `concat`, `write`, `to_xlsx`, `save`
 - `constant_memory` mode
-- Numeric, String, Time, boolean and nil cell values
+- Numeric, String, Time, Date/DateTime, boolean and nil cell values
