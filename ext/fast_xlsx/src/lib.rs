@@ -439,6 +439,10 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn name(&self) -> Result<String, Error> {
+        self.with_ws(|ws| Ok(ws.name()))
+    }
+
     fn next_row(&self) -> u32 {
         self.next_row.get()
     }
@@ -464,6 +468,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     ws.define_method("autofit", method!(Worksheet::autofit, 0))?;
     ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
+    ws.define_method("name", method!(Worksheet::name, 0))?;
     ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
     ws.define_method("set_row_height", method!(Worksheet::set_row_height, 2))?;
     ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;

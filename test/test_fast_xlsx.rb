@@ -281,6 +281,25 @@ class TestFastXlsx < Minitest::Test
     assert_match(/<row r="1"[^>]* ht="30" customHeight="1"/, sheet_xml(wb))
   end
 
+  def test_worksheet_by_name_returns_the_same_worksheet
+    wb = FastXlsx::Workbook.new
+    data = wb.add_worksheet("Data")
+    data << ["a"]
+    wb.worksheet("Data") << ["b"]
+
+    assert_same data, wb.worksheet("Data")
+    assert_nil wb.worksheet("missing")
+    assert_equal [["a"], ["b"]], rows(wb)
+  end
+
+  def test_worksheets_lists_sheets_with_their_names
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet
+    wb.add_worksheet("Summary")
+
+    assert_equal %w[Sheet1 Summary], wb.worksheets.map(&:name)
+  end
+
   def test_unknown_format_option_raises
     error = assert_raises(ArgumentError) { FastXlsx::Format.new(bolt: true) }
     assert_includes error.message, "bolt"

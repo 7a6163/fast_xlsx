@@ -19,6 +19,8 @@ module FastXlsx
   class Workbook
     def self.new: (?constant_memory: bool) -> Workbook
     def add_worksheet: (?String? name) -> Worksheet
+    def worksheets: () -> Array[Worksheet]
+    def worksheet: (String name) -> Worksheet?
     def to_xlsx: () -> String
     def save: (String path) -> void
   end
@@ -46,6 +48,7 @@ module FastXlsx
     def freeze_panes: (Integer row, Integer col) -> self
     def set_row_height: (Integer row, Numeric height) -> self
     def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?Format? format) -> self
+    def name: () -> String
     def next_row: () -> Integer
   end
 end

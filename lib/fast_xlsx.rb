@@ -32,7 +32,17 @@ module FastXlsx
     end
 
     def add_worksheet(name = nil)
-      _add_worksheet(name)
+      _add_worksheet(name).tap { |ws| worksheets << ws }
+    end
+
+    # The same Worksheet objects add_worksheet returned, so their append
+    # position is shared.
+    def worksheets
+      @worksheets ||= []
+    end
+
+    def worksheet(name)
+      worksheets.find { |ws| ws.name == name }
     end
   end
 

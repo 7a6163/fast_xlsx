@@ -12,7 +12,7 @@ Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcn
 require "fast_xlsx"
 
 wb = FastXlsx::Workbook.new                       # or Workbook.new(constant_memory: true)
-ws = wb.add_worksheet("Report")
+ws = wb.add_worksheet("Report")                  # later: wb.worksheet("Report"), wb.worksheets
 
 ws << ["id", "name", "created_at"]                # append a row
 ws.concat(records.map { |r| [r.id, r.name, r.created_at] })  # append many rows in one call

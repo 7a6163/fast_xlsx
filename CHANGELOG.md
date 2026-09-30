@@ -12,3 +12,4 @@
 - `Worksheet#append(values, format: [...])` takes one format per cell
 - `Worksheet#set_column_format` for column default formats
 - `Worksheet#freeze_panes`, `#set_row_height` and `#merge_range`
+- `Workbook#worksheet(name)`, `Workbook#worksheets` and `Worksheet#name`
