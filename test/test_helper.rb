@@ -152,6 +152,13 @@ module XlsxHelpers
     }
   end
 
+  # Runs of the first rich shared string as [[text, bold?, italic?], ...].
+  def rich_runs(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    si = Nokogiri::XML(zip.read("xl/sharedStrings.xml")).remove_namespaces!.css("si").find { |s| s.at("r") }
+    si.css("r").map { |r| [r.at("t").text, !r.at("rPr > b").nil?, !r.at("rPr > i").nil?] }
+  end
+
   private
 
   def style_hash(styles, cell_xf)

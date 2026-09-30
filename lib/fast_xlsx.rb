@@ -30,6 +30,18 @@ module FastXlsx
     end
   end
 
+  # Text with a format per segment, e.g. RichString.new(["Total: ", bold], "1,234").
+  # Each segment is a String (default font) or [String, Format].
+  class RichString
+    attr_reader :segments
+
+    def initialize(*parts)
+      raise ArgumentError, "RichString needs at least one segment" if parts.empty?
+
+      @segments = parts.map { |part| part.is_a?(Array) ? [part[0].to_s, part[1]] : [part.to_s, nil] }.freeze
+    end
+  end
+
   # The native extension looks up FastXlsx::Error, so load it after Error is defined.
   require "fast_xlsx/fast_xlsx"
 

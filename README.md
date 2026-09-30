@@ -162,6 +162,7 @@ Values are mapped by type:
 | `Date`, `DateTime` | number (Excel serial date, own offset) |
 | `FastXlsx::Formula.new("SUM(A1:A9)")` | formula |
 | `FastXlsx::URL.new("https://…")`, `URL.new(url, text: "Title")` | hyperlink (optionally showing other text) |
+| `FastXlsx::RichString.new(["Total: ", bold], "1,234")` | text with a format per segment |
 | `true` / `false` | boolean |
 | `nil` | empty cell |
 | anything else | `to_s` as string |

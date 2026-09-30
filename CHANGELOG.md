@@ -27,3 +27,4 @@
 - `Worksheet#set_header`, `#set_footer` and `#set_margins` (fast_excel #56)
 - Unknown options to `conditional_format`, `data_validation`, `insert_image`, `insert_chart` and chart series raise `ArgumentError`
 - `Worksheet#add_table` (Excel tables with styles, total row and column totals; fast_excel #102)
+- `FastXlsx::RichString` cell values with a format per text segment (fast_excel #67)

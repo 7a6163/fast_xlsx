@@ -625,6 +625,30 @@ class TestFastXlsx < Minitest::Test
     ws.set_header("&[Page]#{"x" * 253}") # &[Page] counts as &P, so this is 255
   end
 
+  def test_rich_string_mixes_formats_in_one_cell
+    wb = FastXlsx::Workbook.new
+    bold = FastXlsx::Format.new(bold: true)
+    italic = FastXlsx::Format.new(italic: true)
+    wb.add_worksheet << ["plain", FastXlsx::RichString.new(["Total: ", bold], "1,234 ", ["(est.)", italic])]
+
+    assert_equal "plain", rows(wb).first.first # roo renders the rich cell as HTML, so check the runs below
+    assert_equal [["Total: ", true, false], ["1,234 ", false, false], ["(est.)", false, true]], rich_runs(wb)
+  end
+
+  def test_rich_string_takes_a_cell_format
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, FastXlsx::RichString.new(["a", FastXlsx::Format.new(bold: true)], "b"),
+                           FastXlsx::Format.new(align: :center))
+
+    assert_equal "center", cell_style(wb, "A1")[:align]
+  end
+
+  def test_rich_string_rejects_a_non_format_segment
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(TypeError) { ws << [FastXlsx::RichString.new(%w[text bold])] }
+    assert_raises(ArgumentError) { FastXlsx::RichString.new }
+  end
+
   def test_add_table_with_headers_and_style
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

@@ -8,7 +8,12 @@ module FastXlsx
     def read: () -> String
   end
 
-  type cell = Numeric | String | Time | Date | Formula | URL | bool | nil | _ToS
+  type cell = Numeric | String | Time | Date | Formula | URL | RichString | bool | nil | _ToS
+
+  class RichString
+    attr_reader segments: Array[[String, Format?]]
+    def initialize: (*(_ToS | [_ToS, Format?]) parts) -> void
+  end
 
   class Formula
     attr_reader expression: String

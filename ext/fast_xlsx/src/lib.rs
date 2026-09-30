@@ -29,6 +29,7 @@ fn fast_xlsx_const<T: TryConvert>(ruby: &Ruby, name: &str) -> T {
 static ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Error"));
 static FORMULA: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Formula"));
 static URL: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "URL"));
+static RICH_STRING: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "RichString"));
 
 fn xerr(e: XlsxError) -> Error {
     let ruby = Ruby::get().unwrap();
@@ -148,6 +149,33 @@ fn emit<T: IntoExcelData>(
     .map_err(xerr)
 }
 
+// RichString#segments is [[text, Format or nil], ...]; nil means the default font.
+fn write_rich_string(
+    ws: &mut rust_xlsxwriter::Worksheet,
+    row: u32,
+    col: u16,
+    v: Value,
+    format: Option<&Format>,
+) -> Result<(), Error> {
+    let default = rust_xlsxwriter::Format::default();
+    let segments: RArray = v.funcall("segments", ())?;
+    let mut parts: Vec<(Option<&Format>, String)> = Vec::with_capacity(segments.len());
+    for segment in segments.into_iter() {
+        let (text, seg_format): (String, Value) = TryConvert::try_convert(segment)?;
+        parts.push((Option::<&Format>::try_convert(seg_format)?, text));
+    }
+    let rich: Vec<(&rust_xlsxwriter::Format, &str)> = parts
+        .iter()
+        .map(|(f, text)| (f.map_or(&default, |f| &f.0), text.as_str()))
+        .collect();
+    match format {
+        Some(f) => ws.write_rich_string_with_format(row, col, &rich, &f.0),
+        None => ws.write_rich_string(row, col, &rich),
+    }
+    .map(|_| ())
+    .map_err(xerr)
+}
+
 fn put(
     ruby: &Ruby,
     ws: &mut rust_xlsxwriter::Worksheet,
@@ -183,6 +211,8 @@ fn put(
             link = link.set_text(text);
         }
         emit(ws, row, col, link, format)
+    } else if v.is_kind_of(ruby.get_inner(&RICH_STRING)) {
+        write_rich_string(ws, row, col, v, format)
     } else if v.respond_to("jd", false)? {
         emit(ws, row, col, excel_date(v)?, format)
     } else {
