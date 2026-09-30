@@ -654,6 +654,17 @@ impl Worksheet {
         self.next_row.set(self.next_row.get().max(row + 1));
     }
 
+    // rust_xlsxwriter silently drops writes to rows it has already flushed.
+    fn check_not_flushed(&self, ruby: &Ruby, row: u32) -> Result<(), Error> {
+        if self.constant_memory && row + 1 < self.next_row.get() {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                format!("row {row} was already flushed in constant_memory mode"),
+            ));
+        }
+        Ok(())
+    }
+
     fn with_ws<T>(
         &self,
         f: impl FnOnce(&mut rust_xlsxwriter::Worksheet) -> Result<T, Error>,
@@ -689,13 +700,7 @@ impl Worksheet {
         v: Value,
         format: Option<&Format>,
     ) -> Result<(), Error> {
-        // rust_xlsxwriter silently drops writes to rows it has already flushed.
-        if rb_self.constant_memory && row + 1 < rb_self.next_row.get() {
-            return Err(Error::new(
-                ruby.get_inner(&ERROR),
-                format!("row {row} was already flushed in constant_memory mode"),
-            ));
-        }
+        rb_self.check_not_flushed(ruby, row)?;
         rb_self.with_ws(|ws| put(ruby, ws, row, col, v, format))?;
         rb_self.advance(row);
         Ok(())
@@ -1210,6 +1215,8 @@ impl Worksheet {
                 v.to_bool()
             }
         };
+        // The table writes its header row, which must not be flushed yet.
+        rb_self.check_not_flushed(ruby, fr)?;
         let mut table = Table::new()
             .set_total_row(flag("total_row", false))
             .set_banded_rows(flag("banded_rows", true))
@@ -1243,7 +1250,8 @@ impl Worksheet {
                 .map(|_| ())
                 .map_err(xerr)
         })?;
-        rb_self.advance(lr);
+        // Continue appending under the header, so `<<` fills the table.
+        rb_self.advance(fr);
         Ok(rb_self)
     }
 

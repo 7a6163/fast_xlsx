@@ -606,6 +606,7 @@ class TestFastXlsx < Minitest::Test
     assert_equal FastXlsx::URL.new("https://a"), FastXlsx::URL.new(url: "https://a")
     assert_equal FastXlsx::URL.new("https://a"), FastXlsx::URL["https://a"]
     assert_equal "5", FastXlsx::URL.new("https://a").with(text: 5).text
+    assert_raises(ArgumentError) { FastXlsx::URL.new("https://a", "text", "extra") }
   end
 
   def test_set_properties_adds_to_earlier_calls
@@ -677,6 +678,24 @@ class TestFastXlsx < Minitest::Test
     wb.add_worksheet.add_table(0, 0, 2, 0, columns: %w[A], name: "Sales", banded_rows: false, autofilter: false)
 
     assert_equal ["Sales", "0", false], table(wb).values_at(:name, :banded_rows, :autofilter)
+  end
+
+  def test_add_table_then_append_fills_the_table
+    [false, true].each do |constant_memory|
+      wb = FastXlsx::Workbook.new(constant_memory: constant_memory)
+      ws = wb.add_worksheet
+      ws.add_table(0, 0, 2, 1, columns: %w[Region Sales])
+      ws << ["North", 10] << ["South", 20]
+
+      assert_equal [%w[Region Sales], ["North", 10], ["South", 20]], rows(wb), "constant_memory: #{constant_memory}"
+    end
+  end
+
+  def test_add_table_after_its_header_row_was_flushed_raises
+    wb = FastXlsx::Workbook.new(constant_memory: true)
+    ws = wb.add_worksheet
+    ws << ["x"] << ["y"] << ["z"]
+    assert_raises(FastXlsx::Error) { ws.add_table(0, 0, 2, 0, columns: %w[A]) }
   end
 
   def test_add_table_validates_columns_style_and_options

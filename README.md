@@ -137,6 +137,8 @@ ws.add_table(0, 0, sales.size + 1, 2, total_row: true, style: :medium2, # +1 row
 
 The range includes the header row and, with `total_row: true`, the total row; the table writes the headers. `columns` must match the range width. Options: `style` (`:light1`–`:light21`, `:medium1`–`:medium28`, `:dark1`–`:dark11`, `:none`), `name`, `total_row`, `banded_rows`, `autofilter`. Column totals: `:sum`, `:average`, `:count`, `:count_numbers`, `:max`, `:min`, `:std_dev`, `:var`.
 
+You can also add the table first and then append the data: after `add_table`, `<<` / `append` / `concat` continue right under the header row. In `constant_memory` mode this is the only order that works; adding a table whose header row was already flushed raises `FastXlsx::Error`.
+
 ### Charts
 
 ```ruby

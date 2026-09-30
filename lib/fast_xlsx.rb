@@ -19,6 +19,8 @@ module FastXlsx
   # accept URL.new(url, text: ...) as well as the usual Data forms.
   class URL < Data.define(:url, :text) # rubocop:disable Style/DataInheritance
     def self.new(*args, **kwargs)
+      raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0..2)" if args.size > 2
+
       kwargs[:url] = args[0] unless args.empty?
       kwargs[:text] = args[1] if args.size > 1
       super(**kwargs)
