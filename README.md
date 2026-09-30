@@ -113,8 +113,10 @@ ws.write_comment(0, 0, "Checked by finance", author: "Zac")   # Excel shows it a
 
 ```ruby
 ws.insert_image(0, 0, "logo.png")                                  # top-left corner in A1
-ws.insert_image(0, 5, blob.download, scale: 0.5, x_offset: 10, y_offset: 4, alt_text: "Logo")
+ws.insert_image(0, 5, StringIO.new(blob.download), scale: 0.5, x_offset: 10, y_offset: 4, alt_text: "Logo")
 ```
+
+A String is always treated as a path, so wrap raw bytes (such as Active Storage's `blob.download`) in a `StringIO`.
 
 The source is a file path or any IO responding to `#read` (PNG, JPEG, GIF or BMP). Offsets are in pixels. Data that is not a supported image raises `FastXlsx::Error`.
 
