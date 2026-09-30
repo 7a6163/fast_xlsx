@@ -756,6 +756,16 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  def test_table_column_format_applies_to_a_merged_value
+    money = FastXlsx::Format.new(num_format: "#,##0.00")
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.add_table(0, 0, 5, 1, columns: ["Region", { header: "Sales", format: money }])
+    ws.merge_range(1, 1, 2, 1, 1234.5)
+
+    assert_equal "#,##0.00", open_xlsx(wb).excelx_format(2, 2)
+  end
+
   def test_table_column_format_applies_to_rows_appended_later
     money = FastXlsx::Format.new(num_format: "#,##0.00")
     bold = FastXlsx::Format.new(bold: true)
@@ -772,6 +782,16 @@ class TestFastXlsx < Minitest::Test
       assert_equal "General", xlsx.excelx_format(4, 2), "memory: #{memory}"
       assert_equal "General", xlsx.excelx_format(5, 2), "memory: #{memory}"
     end
+  end
+
+  def test_table_column_format_skips_the_header_row
+    money = FastXlsx::Format.new(num_format: "#,##0.00")
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.add_table(0, 0, 3, 1, columns: ["Region", { header: "Sales", format: money }])
+    ws.write(0, 1, "Sales (USD)")
+
+    assert_equal "General", open_xlsx(wb).excelx_format(1, 2)
   end
 
   def test_add_table_after_its_header_row_was_flushed_raises
@@ -876,6 +896,35 @@ class TestFastXlsx < Minitest::Test
     ws << [9]
 
     assert_equal [[9]], rows(wb)
+  end
+
+  # Values only rust_xlsxwriter rejects, or that fail late: the row must still
+  # come out empty, not half written.
+  def test_a_row_that_fails_to_write_leaves_no_cells
+    {
+      "string over 32,767 chars" => "x" * 40_000,
+      "invalid UTF-8" => "caf\xE9".dup.force_encoding("UTF-8"),
+      "URL over 2,083 chars" => FastXlsx::URL.new("https://example.com/#{"a" * 3000}")
+    }.each do |label, bad|
+      wb = FastXlsx::Workbook.new
+      ws = wb.add_worksheet
+      assert_raises(StandardError, label) { ws << ["a", "b", bad] }
+      ws << ["z"]
+
+      assert_equal [["z"]], rows(wb), label
+    end
+  end
+
+  def test_merge_range_with_a_bad_value_leaves_no_merge
+    %i[standard constant].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      ws = wb.add_worksheet
+      assert_raises(StandardError) { ws.merge_range(0, 0, 0, 2, "x" * 40_000) }
+      ws.write(0, 0, "ok")
+
+      refute_match(/mergeCell/, sheet_xml(wb), "memory: #{memory}")
+      assert_equal [["ok"]], rows(wb), "memory: #{memory}"
+    end
   end
 
   # Iterating a row must not dup it: dup'ing an Array longer than 3 elements
@@ -1014,6 +1063,18 @@ class TestFastXlsx < Minitest::Test
       assert_equal %w[Good], open_xlsx(wb).sheets, "memory: #{memory}"
       assert_equal %w[Good], wb.worksheets.map(&:name)
     end
+  end
+
+  # An unnamed sheet takes the next free "SheetN", like Excel, instead of a
+  # default name that clashes and fails only when saving.
+  def test_unnamed_sheet_skips_names_already_taken
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet("Sheet2")
+    first = wb.add_worksheet
+    second = wb.add_worksheet
+
+    assert_equal %w[Sheet2 Sheet1 Sheet3], [wb.worksheet("Sheet2").name, first.name, second.name]
+    assert_equal %w[Sheet2 Sheet1 Sheet3], open_xlsx(wb).sheets
   end
 
   # Excel sheet names are case-insensitive; the clash should surface at

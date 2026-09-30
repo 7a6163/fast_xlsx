@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+### Fixed
+
+- A row whose value is rejected while writing (a string over 32,767 characters, invalid UTF-8, a URL over 2,083 characters) no longer leaves its earlier cells behind.
+- `merge_range` with a rejected value no longer leaves the range merged; the value also takes its table column's format.
+- An unnamed worksheet takes the first free `SheetN` instead of a name that clashes with one given earlier (which failed only when saving).
+- Cell values and formats are copied out of Ruby objects when a row is converted, so Ruby code run while converting (a `to_s`) cannot change or free them before they are written.
+- Ruby code run while converting a value (a `to_s`, `jd`, ...) that touches the same workbook, or another thread writing to it, no longer deadlocks. A value that fails to convert leaves its row unwritten.
+- In `:constant` / `:low` mode, `merge_range` and `add_table` on rows already written to disk raise `FastXlsx::Error` instead of being dropped; cells beside a tall merge can still be written.
+- Table column formats apply to rows written after `add_table`.
+- Invalid worksheet names raise without leaving an extra sheet behind; names that differ only in case raise at `add_worksheet`, not at save.
+- Strings in other encodings (e.g. Windows-1252) are converted to UTF-8.
+- `data_validation` lists accept numbers and other values (listed by `to_s`).
+- Dates match Excel's 1900 date system (serials before 1900-03-01 were one too high); dates before 1900 raise `ArgumentError`.
+- `Workbook#save` accepts a `Pathname`.
+
 ## [0.1.1] - 2026-09-30
 
 ### Fixed
