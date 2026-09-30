@@ -39,8 +39,8 @@ module FastXlsx
     def append: (Array[cell] values, ?format: Format? | Array[Format?]) -> self
     def <<: (Array[cell] row) -> self
     def concat: (Array[Array[cell]] rows) -> self
-    def set_column_width: (Integer | Range[Integer] columns, Numeric width) -> self def set_column_format: (Integer | Range[Integer] columns, Format format) -> self
-
+    def set_column_width: (Integer | Range[Integer] columns, Numeric width) -> self
+    def set_column_format: (Integer | Range[Integer] columns, Format format) -> self
     def autofit: () -> self
     def autofilter: (Integer first_row, Integer first_col, Integer last_row, Integer last_col) -> self
     def next_row: () -> Integer
