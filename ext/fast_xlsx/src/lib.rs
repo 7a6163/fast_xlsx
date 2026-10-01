@@ -44,6 +44,13 @@ type Shared = Arc<Mutex<rust_xlsxwriter::Workbook>>;
 // `f` must not touch any Ruby object, and must release the workbook mutex
 // before returning: a Ruby thread waiting on that mutex holds the lock this
 // thread then needs back.
+//
+// Uses the "2" variant: rb_thread_call_without_gvl raises pending interrupts
+// (Thread#raise, Timeout, Ctrl-C) by longjmp-ing over these Rust frames,
+// which skips their destructors. This one never raises; if an interrupt is
+// already pending it returns without calling `f`, which then runs with the
+// lock held. Either way Ruby raises the interrupt after the method returns.
+// Without an unblocking function, an interrupt waits for `f` to finish.
 fn without_gvl<R>(f: impl FnOnce() -> R) -> R {
     unsafe extern "C" fn call<F: FnOnce() -> R, R>(
         data: *mut std::ffi::c_void,
@@ -58,14 +65,18 @@ fn without_gvl<R>(f: impl FnOnce() -> R) -> R {
     fn run<F: FnOnce() -> R, R>(f: F) -> R {
         let mut data: (Option<F>, Option<std::thread::Result<R>>) = (Some(f), None);
         unsafe {
-            rb_sys::rb_thread_call_without_gvl(
+            rb_sys::rb_thread_call_without_gvl2(
                 Some(call::<F, R>),
                 &mut data as *mut _ as *mut std::ffi::c_void,
                 None,
                 std::ptr::null_mut(),
             );
         }
-        match data.1.unwrap() {
+        let Some(result) = data.1 else {
+            // An interrupt was pending, so `call` never ran.
+            return (data.0.take().unwrap())();
+        };
+        match result {
             Ok(result) => result,
             Err(panic) => std::panic::resume_unwind(panic),
         }

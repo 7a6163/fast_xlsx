@@ -301,7 +301,7 @@ The `:standard` mode uses more memory than fast_excel's: when saving, rust_xlsxw
 
 ### Threads
 
-Most of the time goes into saving (building the XML and compressing it). `to_xlsx` and `save` do that without holding Ruby's global lock, so in a threaded server (Puma, Sidekiq) other threads keep running while a large export is saved.
+Most of the time goes into saving (building the XML and compressing it). `to_xlsx` and `save` do that without holding Ruby's global lock, so in a threaded server (Puma, Sidekiq) other threads keep running while a large export is saved. An interrupt (Ctrl-C, `Timeout`, `Thread#raise`) takes effect once the save finishes.
 
 ### Reproduce
 

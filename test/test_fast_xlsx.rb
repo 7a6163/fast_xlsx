@@ -1531,13 +1531,16 @@ class TestFastXlsx < Minitest::Test
     counter = Thread.new { loop { count += 1 } }
     sleep 0.05 # let it start
 
-    [-> { wb.to_xlsx }, -> { Tempfile.create(%w[gvl .xlsx]) { |f| wb.save(f.path) } }].each do |save|
+    # The path is made beforehand: creating a file releases the lock by itself.
+    path = File.join(Dir.mktmpdir, "gvl.xlsx")
+    [-> { wb.to_xlsx }, -> { wb.save(path) }].each do |save|
       before = count
       save.call
       assert_operator count - before, :>, 1000
     end
   ensure
     counter&.kill
+    FileUtils.rm_rf(File.dirname(path)) if path
   end
 
   def test_properties
