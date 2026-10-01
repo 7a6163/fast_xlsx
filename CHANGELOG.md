@@ -2,6 +2,7 @@
 
 ### Changed
 
+- Errors follow one rule (see the README): a row or column outside the sheet raises `RangeError` (row 1,048,576 or column 16,384 raised `FastXlsx::Error`); `zoom` converts numbers with `to_int` like other arguments (`zoom(150.9)` raised `TypeError`); `column_width` outside 0..255 and `row_height` outside 0..409 raise `ArgumentError` (a negative one hid the column or row).
 - Date and time cells written with a format that has no `num_format` (e.g. `append(row, format: bold)`) get the default date format added, instead of showing as serial numbers. This applies to a cell's own format, a table column's and `column_format`'s; a format with a `num_format` is used as is.
 
 ## [0.4.0] - 2026-10-01

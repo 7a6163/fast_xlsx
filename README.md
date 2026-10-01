@@ -263,7 +263,16 @@ Values are mapped by type:
 
 `<<` and `concat` append after the last row written to that worksheet. In `:constant` / `:low` memory mode rows are written to disk as you go, so fill each worksheet top to bottom.
 
-Errors from the writer (invalid sheet names, writes to rows already on disk, …) raise `FastXlsx::Error`.
+### Errors
+
+| Error | Raised for |
+|---|---|
+| `TypeError` | an argument of the wrong type, e.g. a String where a row number goes |
+| `RangeError` | a row or column outside the sheet (1,048,576 × 16,384), or a negative count |
+| `ArgumentError` | the right type but a value that isn't allowed: an unknown option or symbol, an invalid color, cell reference or range, a zoom, width or height beyond Excel's limits |
+| `FastXlsx::Error` | what the workbook can't do: duplicate or invalid names, writing to rows already on disk, overlapping merges, hiding the sheet Excel opens on, text or URLs over Excel's limits, unsupported images |
+
+Numbers are converted like Ruby's own methods do (`to_int`), so `1.9` as a row is row `1`.
 
 ## Performance
 

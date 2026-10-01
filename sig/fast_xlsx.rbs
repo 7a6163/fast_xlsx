@@ -81,7 +81,7 @@ module FastXlsx
     def page_footer: (String text, ?margin: Numeric?) -> self
     def activate: () -> self
     def hide: () -> self
-    def zoom: (Integer percent) -> self
+    def zoom: (int percent) -> self
     def tab_color: (String | Integer color) -> self
     def hide_gridlines: () -> self
     def page_setup: (?landscape: bool, ?paper: :letter | :legal | :tabloid | :a3 | :a4 | :a5 | Integer,

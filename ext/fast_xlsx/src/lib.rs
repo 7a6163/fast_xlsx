@@ -34,9 +34,27 @@ static FORMULA: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Formula")
 static URL: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "URL"));
 static RICH_STRING: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "RichString"));
 
+// A row or column outside the sheet is a RangeError, like a negative one
+// (which fails converting to an unsigned number before reaching the writer).
 fn xerr(e: XlsxError) -> Error {
     let ruby = Ruby::get().unwrap();
-    Error::new(ruby.get_inner(&ERROR), e.to_string())
+    let class = match e {
+        XlsxError::RowColumnLimitError => ruby.exception_range_error(),
+        _ => ruby.get_inner(&ERROR),
+    };
+    Error::new(class, e.to_string())
+}
+
+// Excel's limits that rust_xlsxwriter doesn't check: a negative width or
+// height hides the column or row, a larger one is capped or invalid.
+fn check_size(ruby: &Ruby, what: &str, size: f64, max: f64) -> Result<(), Error> {
+    if (0.0..=max).contains(&size) {
+        return Ok(());
+    }
+    Err(Error::new(
+        ruby.exception_arg_error(),
+        format!("invalid {what} {size}: use 0..{max}"),
+    ))
 }
 
 type Shared = Arc<Mutex<rust_xlsxwriter::Workbook>>;
@@ -1138,8 +1156,15 @@ impl Worksheet {
         Ok(rb_self)
     }
 
-    fn set_column_width(&self, first: u16, last: u16, width: f64) -> Result<(), Error> {
-        self.with_ws(|ws| {
+    fn set_column_width(
+        ruby: &Ruby,
+        rb_self: &Self,
+        first: u16,
+        last: u16,
+        width: f64,
+    ) -> Result<(), Error> {
+        check_size(ruby, "column width", width, 255.0)?;
+        rb_self.with_ws(|ws| {
             ws.set_column_range_width(first, last, width)
                 .map(|_| ())
                 .map_err(xerr)
@@ -1186,7 +1211,13 @@ impl Worksheet {
         Ok(rb_self)
     }
 
-    fn set_row_height(rb_self: Obj<Self>, row: u32, height: f64) -> Result<Obj<Self>, Error> {
+    fn set_row_height(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        row: u32,
+        height: f64,
+    ) -> Result<Obj<Self>, Error> {
+        check_size(ruby, "row height", height, 409.0)?;
         rb_self.with_ws(|ws| ws.set_row_height(row, height).map(|_| ()).map_err(xerr))?;
         Ok(rb_self)
     }
@@ -1727,16 +1758,7 @@ impl Worksheet {
         Ok(rb_self)
     }
 
-    fn zoom(ruby: &Ruby, rb_self: Obj<Self>, percent: Value) -> Result<Obj<Self>, Error> {
-        // Integers only: converting would quietly truncate 150.9.
-        let percent = Integer::from_value(percent)
-            .ok_or_else(|| {
-                Error::new(
-                    ruby.exception_type_error(),
-                    format!("zoom must be an Integer, got {}", percent.inspect()),
-                )
-            })?
-            .to_i64()?;
+    fn zoom(ruby: &Ruby, rb_self: Obj<Self>, percent: i64) -> Result<Obj<Self>, Error> {
         // rust_xlsxwriter only prints a warning for these.
         if !(10..=400).contains(&percent) {
             return Err(Error::new(

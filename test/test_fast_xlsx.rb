@@ -1547,7 +1547,6 @@ class TestFastXlsx < Minitest::Test
   def test_view_and_page_setup_reject_bad_numbers
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    assert_raises(TypeError) { ws.zoom(150.9) }
     error = assert_raises(ArgumentError) { ws.page_setup(paper: 300) }
     assert_match(/paper/, error.message)
 
@@ -1559,7 +1558,7 @@ class TestFastXlsx < Minitest::Test
   def test_invalid_merge_reports_its_own_error_before_overlap
     ws = FastXlsx::Workbook.new.add_worksheet
     ws.merge_range("A1:B1", "first")
-    error = assert_raises(FastXlsx::Error) { ws.merge_range(0, 0, 2_000_000, 1, "x") }
+    error = assert_raises(RangeError) { ws.merge_range(0, 0, 2_000_000, 1, "x") }
     refute_match(/overlaps/, error.message)
   end
 
@@ -1597,6 +1596,34 @@ class TestFastXlsx < Minitest::Test
   ensure
     counter&.kill
     FileUtils.rm_rf(File.dirname(path)) if path
+  end
+
+  # TypeError: the wrong type. RangeError: a row or column outside the sheet
+  # (or a negative count). ArgumentError: the right type, but not allowed.
+  def test_error_classes_follow_one_rule
+    ws = FastXlsx::Workbook.new.add_worksheet
+    [-> { ws.write(-1, 0, 1) }, -> { ws.write(1_048_576, 0, 1) }, -> { ws.write(0, 16_384, 1) },
+     -> { ws.write(0, 70_000, 1) }, -> { ws.autofilter(0, 0, 2_000_000, 1) }, -> { ws.column_width(20_000, 5) },
+     -> { ws.merge_range(0, 0, 1_048_576, 1, "x") }].each_with_index do |call, i|
+      assert_raises(RangeError, "case #{i}", &call)
+    end
+    assert_raises(TypeError) { ws.write(nil, 0, 1) }
+    assert_raises(TypeError) { ws.zoom("100") }
+    [-> { ws.column_width(0, -5) }, -> { ws.column_width(0, 300) }, -> { ws.row_height(0, -5) },
+     -> { ws.row_height(0, 500) }, -> { ws.zoom(500) }].each_with_index do |call, i|
+      assert_raises(ArgumentError, "case #{i}", &call)
+    end
+  end
+
+  # Like Ruby's own methods, numbers are converted with to_int.
+  def test_float_arguments_are_truncated
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.zoom(150.9)
+    ws.write(0.9, 1.9, "x")
+
+    assert_equal "150", sheet_doc(wb).at("sheetView")["zoomScale"]
+    assert_equal [[nil, "x"]], rows(wb)
   end
 
   def test_properties
