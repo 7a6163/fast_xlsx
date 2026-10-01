@@ -1,11 +1,17 @@
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-01
+
 ### Added
 
 - Range methods (`autofilter`, `merge_range`, `conditional_format`, `data_validation`, `add_table`) also take an Excel reference (`"A1:D10"`) or rows and columns as Integers or Ranges (`0..9, 0..3`).
 - `Workbook#define_name` for workbook-wide and sheet-scoped defined names.
 - `Worksheet#group_rows` and `#group_columns` (outline groups, optionally collapsed); `group_rows` raises in `:constant` / `:low` mode.
 - `Worksheet#protect(password:, allow:)` locks a sheet; `Format` options `locked: false` and `hidden: true` keep cells editable or hide formulas.
+
+### Changed
+
+- `column_width`, `column_format` and the other methods that take a Range raise `ArgumentError` for an empty, reversed or endless Range, or one that isn't Integers, instead of a `TypeError` or `RangeError`.
 
 ## [0.1.2] - 2026-09-30
 
