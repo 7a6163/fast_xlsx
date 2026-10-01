@@ -9,7 +9,7 @@ module FastXlsx
   end
 
   # A Format, or a Hash of its options.
-  type format = Format | Hash[Symbol, untyped]
+  type format = Format | Hash[Symbol | String, untyped]
 
   type cell = Numeric | String | Time | Date | Formula | URL | RichString | bool | nil | _ToS
 

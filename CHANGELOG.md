@@ -5,8 +5,12 @@
 - A Hash of options works wherever a format goes (`write(0, 0, "x", { bold: true })`, `append(row, format: { bold: true })`, table columns, conditional formats, rich strings); equal Hashes share one format.
 - `ws["B2"] = value` and `ws[row, col] = value` write a cell.
 - `Format#to_h` (its options) and `Format#merge` (a new format with more options, from keywords, a Hash or another Format).
-- A `Format` is a frozen value: formats with the same options are `==` and `eql?`, with the same `hash`. Options may have String keys (e.g. parsed from JSON or YAML).
+- Formats with the same options are `==`; `eql?` and `hash` follow `Hash#eql?` (so `10` and `10.0` differ there), letting formats serve as Hash keys. Options may have String keys (e.g. parsed from JSON or YAML); the same option as a String and a Symbol raises `ArgumentError`.
 - `Workbook.new` and `Workbook#add_worksheet` yield the new object to a block.
+
+### Changed
+
+- A `Format` is frozen, and keeps frozen copies of its option values: one is shared wherever the same options are used.
 
 ### Fixed
 

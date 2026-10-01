@@ -663,14 +663,28 @@ module FastXlsx
     #   border_color:, locked:, hidden:
     # @raise [ArgumentError] for an unknown option or an invalid value
     def self.new(**options)
-      # String keys too (options from JSON or YAML); values are copied, so the
-      # format can't change behind the file's back.
-      options = options.to_h { |key, value| [key.to_sym, value.frozen? ? value : value.dup.freeze] }.freeze
+      options = _options(options)
       # Apply border: first so border_left: etc. override it whatever the order.
       ordered = options.key?(:border) ? { border: options[:border], **options.except(:border) } : options
       format = _new(ordered)
       format.instance_variable_set(:@options, options)
       format.freeze
+    end
+
+    # Options with Symbol keys (String ones come from JSON or YAML) and frozen
+    # copies of the values, so the format can't change behind the file's back.
+    # @api private
+    def self._options(given)
+      options = given.to_h { |key, value| [key.to_sym, _frozen(value)] }.freeze
+      return options if options.size == given.size
+
+      twice = given.keys.map(&:to_sym).tally.select { |_, count| count > 1 }.keys
+      raise ArgumentError, "format option given twice (as a String and a Symbol): #{twice.join(", ")}"
+    end
+
+    # @api private
+    def self._frozen(value)
+      value.frozen? ? value : value.dup.freeze
     end
 
     # The options this format was created with.
@@ -679,12 +693,17 @@ module FastXlsx
       @options
     end
 
-    # Formats with the same options are equal (and work as Hash keys).
+    # Formats with the same options are equal; 10 and 10.0 count as the same.
     # @return [Boolean]
     def ==(other)
       other.is_a?(Format) && to_h == other.to_h
     end
-    alias eql? ==
+
+    # Equal as Hash keys: like Hash#eql?, 10 and 10.0 differ, matching {#hash}.
+    # @return [Boolean]
+    def eql?(other)
+      other.is_a?(Format) && to_h.eql?(other.to_h)
+    end
 
     # @return [Integer]
     def hash
@@ -697,11 +716,18 @@ module FastXlsx
     #   title = header.merge(font_size: 16)
     #   bold_money = bold.merge(money)
     # @return [Format]
+    # @raise [TypeError] when other has no #to_h
     def merge(other = nil, **)
+      unless other.respond_to?(:to_h)
+        raise TypeError,
+              "can't merge #{other.class} into a Format: use a Hash or a Format"
+      end
+
       Format.new(**to_h, **other.to_h, **)
     end
 
-    # Distinct Hashes kept by {._coerce}; past this, the oldest is dropped.
+    # Distinct Hashes kept by {._coerce}; past this, the least recently used
+    # is dropped.
     CACHE_SIZE = 1_024
 
     # A Format for a Hash of options; equal Hashes share one, so a Hash written
@@ -711,12 +737,21 @@ module FastXlsx
     def self._coerce(format)
       return format unless format.is_a?(Hash)
 
+      # Entries are [frozen key, format], in order of use: a hit moves to the
+      # end, so a Hash in constant use isn't evicted.
       cache = (@cache ||= {})
-      cache.fetch(format) do
-        coerced = new(**format)
-        cache.shift if cache.size >= CACHE_SIZE # oldest first
-        cache[format.dup.freeze] = coerced
+      if (entry = cache.delete(format))
+        cache[entry[0]] = entry
+        return entry[1]
       end
+      _cache(cache, format.dup.freeze, new(**format))
+    end
+
+    # @api private
+    def self._cache(cache, key, format)
+      cache.shift if cache.size >= CACHE_SIZE # least recently used
+      cache[key] = [key, format]
+      format
     end
   end
 end

@@ -1883,7 +1883,8 @@ class TestFastXlsx < Minitest::Test
     ws.write(0, 1, "y", { "italic" => true })
 
     xlsx = open_xlsx(wb)
-    assert [xlsx.font(1, 1).bold?, xlsx.font(1, 2).italic?].all?
+    assert_predicate xlsx.font(1, 1), :bold?
+    assert_predicate xlsx.font(1, 2), :italic?
     assert_raises(ArgumentError) { ws.write(0, 2, "z", { "bolt" => true }) }
   end
 
@@ -1895,15 +1896,38 @@ class TestFastXlsx < Minitest::Test
     assert_equal expected, bold.merge(FastXlsx::Format.new(italic: true)).to_h
   end
 
+  # Equal Hashes share one Format; the least recently used goes past CACHE_SIZE.
   def test_hash_formats_are_cached_but_not_without_limit
-    wb = FastXlsx::Workbook.new
-    ws = wb.add_worksheet
-    2_000.times { |i| ws.write(i, 0, i, { font_size: 8 + ((i % 1_500) / 100.0) }) }
+    ws = FastXlsx::Workbook.new.add_worksheet
+    kept = { bold: true, font_name: "Kept" }
+    first = FastXlsx::Format._coerce(kept)
+    (FastXlsx::Format::CACHE_SIZE * 2).times do |i|
+      ws.write(i, 0, i, { font_size: 8 + (i / 100.0) })
+      FastXlsx::Format._coerce(kept) # in use all along, so never the least recent
+    end
     cache = FastXlsx::Format.instance_variable_get(:@cache)
-    assert_operator cache.size, :<=, 1_024
 
+    assert_operator cache.size, :<=, FastXlsx::Format::CACHE_SIZE
+    assert_same first, FastXlsx::Format._coerce(kept)
+    refute cache.key?({ font_size: 8.0 }), "the least recently used went first"
     assert_raises(ArgumentError) { ws.write(0, 1, 1, { bold: true, colour: "#FF0000" }) }
     refute cache.key?({ bold: true, colour: "#FF0000" }), "an invalid Hash isn't cached"
+  end
+
+  # eql? and hash agree, so Formats work as Hash keys: 10 and 10.0 differ there.
+  def test_format_eql_matches_hash
+    ten = FastXlsx::Format.new(font_size: 10)
+    ten_point_oh = FastXlsx::Format.new(font_size: 10.0)
+
+    assert_equal ten, ten_point_oh # == compares values, like Hash#==
+    refute ten.eql?(ten_point_oh)
+    assert_equal 2, [ten, ten_point_oh].uniq.size
+  end
+
+  def test_format_option_clashes_and_bad_merges_raise
+    error = assert_raises(ArgumentError) { FastXlsx::Format.new("bold" => true, bold: false) }
+    assert_match(/bold/, error.message)
+    assert_raises(TypeError) { FastXlsx::Format.new(bold: true).merge("italic") }
   end
 
   def test_index_assignment_returns_the_value
