@@ -1582,7 +1582,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("_column_width", method!(Worksheet::set_column_width, 3))?;
     ws.define_method("_column_format", method!(Worksheet::set_column_format, 3))?;
     ws.define_method("_autofit", method!(Worksheet::autofit, 0))?;
-    ws.define_method("autofilter", method!(Worksheet::autofilter, 4))?;
+    ws.define_method("_autofilter", method!(Worksheet::autofilter, 4))?;
     ws.define_method("name", method!(Worksheet::name, 0))?;
     ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
     ws.define_method("_insert_image", method!(Worksheet::insert_image, 4))?;

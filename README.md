@@ -88,7 +88,18 @@ ws.column_width(0, 20)        # column A, width in characters
 ws.column_width(1..3, 12)     # columns B–D
 ws.column_format(4, FastXlsx::Format.new(num_format: "#,##0.00")) # default for cells in E written without a format
 ws.autofit                        # size other columns to the data written so far; set widths are kept
-ws.autofilter(0, 0, 100, 3)       # filter buttons on A1:D101 (first_row, first_col, last_row, last_col)
+ws.autofilter("A1:D101")          # filter buttons on A1:D101
+```
+
+### Cell ranges
+
+`autofilter`, `merge_range`, `conditional_format`, `data_validation` and `add_table` take a range in any of these styles:
+
+```ruby
+ws.autofilter(0, 0, 100, 3)   # four 0-based numbers: first_row, first_col, last_row, last_col
+ws.autofilter("A1:D101")      # an Excel reference; "$A$1:$D$101" and a single "B2" work too
+ws.autofilter(0..100, 0..3)   # rows and columns, each an Integer or a Range
+ws.merge_range(0, 0..3, "Q3 report", title) # row 1, columns A–D
 ```
 
 `autofit` only sees rows still in memory, so in `:constant` / `:low` memory mode it ignores rows already written to disk; set widths with `column_width` instead.

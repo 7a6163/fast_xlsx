@@ -2,6 +2,7 @@
 
 ### Added
 
+- Range methods (`autofilter`, `merge_range`, `conditional_format`, `data_validation`, `add_table`) also take an Excel reference (`"A1:D10"`) or rows and columns as Integers or Ranges (`0..9, 0..3`).
 - `Workbook#define_name` for workbook-wide and sheet-scoped defined names.
 - `Worksheet#group_rows` and `#group_columns` (outline groups, optionally collapsed); `group_rows` raises in `:constant` / `:low` mode.
 - `Worksheet#protect(password:, allow:)` locks a sheet; `Format` options `locked: false` and `hidden: true` keep cells editable or hide formulas.

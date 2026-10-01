@@ -113,7 +113,7 @@ module FastXlsx
 
     # columns: a 0-based column index or a Range of them. width is in characters.
     def column_width(columns, width)
-      range = bounds(columns)
+      range = CellRange.bounds(columns)
       _column_width(*range, width)
       @fixed_widths ||= {}
       @fixed_widths.delete(range) # re-insert so autofit replays calls in order
@@ -129,21 +129,32 @@ module FastXlsx
       self
     end
 
+    # The methods below take a cell range in any of these styles:
+    #   (first_row, first_col, last_row, last_col)  four 0-based numbers
+    #   ("A1:D10") or ("B2")                        an Excel reference
+    #   (rows, cols)                                Integers or Ranges, e.g. (0..9, 0..3)
+
+    # Filter buttons on the range's first row.
+    def autofilter(*range)
+      _autofilter(*CellRange.split(range).first)
+    end
+
     # Merges the range and writes value (any cell type) into its first cell.
-    def merge_range(first_row, first_col, last_row, last_col, value, format = nil)
-      _merge_range(first_row, first_col, last_row, last_col, value, format)
+    def merge_range(*args)
+      range, (value, format) = CellRange.split(args, 1..2)
+      _merge_range(*range, value, format)
     end
 
     # Highlights cells in the range by rule. type: :cell, :text, :formula,
     # :data_bar or :color_scale; see the README for each type's options.
-    def conditional_format(first_row, first_col, last_row, last_col, type:, **)
-      _conditional_format(first_row, first_col, last_row, last_col, { type: type, ** })
+    def conditional_format(*range, type:, **)
+      _conditional_format(*CellRange.split(range).first, { type: type, ** })
     end
 
     # Restricts what can be entered in the range. type: :list, :whole_number,
     # :decimal or :text_length; see the README for the options.
-    def data_validation(first_row, first_col, last_row, last_col, type:, **)
-      _data_validation(first_row, first_col, last_row, last_col, { type: type, ** })
+    def data_validation(*range, type:, **)
+      _data_validation(*CellRange.split(range).first, { type: type, ** })
     end
 
     # Adds a comment (Excel "note") to a cell.
@@ -170,8 +181,8 @@ module FastXlsx
     # into an Excel table. columns: header Strings or { header:, total:,
     # total_label:, format: }; other options: style:, name:, total_row:,
     # banded_rows:, autofilter:.
-    def add_table(first_row, first_col, last_row, last_col, **)
-      _add_table(first_row, first_col, last_row, last_col, { ** })
+    def add_table(*range, **)
+      _add_table(*CellRange.split(range).first, { ** })
     end
 
     # Printed page header/footer using Excel codes such as "&CPage &P of &N".
@@ -196,11 +207,11 @@ module FastXlsx
     # or a Range; grouping rows already grouped nests them (up to 7 levels).
     # collapsed: true hides them until expanded.
     def group_rows(rows, collapsed: false)
-      _group_rows(*bounds(rows), collapsed)
+      _group_rows(*CellRange.bounds(rows), collapsed)
     end
 
     def group_columns(columns, collapsed: false)
-      _group_columns(*bounds(columns), collapsed)
+      _group_columns(*CellRange.bounds(columns), collapsed)
     end
 
     # Locks the sheet against editing. Cells whose format has locked: false
@@ -214,11 +225,68 @@ module FastXlsx
 
     # Default format for cells in these columns that are written without one.
     def column_format(columns, format)
-      _column_format(*bounds(columns), format)
+      _column_format(*CellRange.bounds(columns), format)
       self
     end
+  end
 
-    private
+  # Cell ranges in the styles Worksheet methods accept: four 0-based numbers,
+  # an Excel reference ("A1:D10", "B2"), or rows and columns as Integers or
+  # Ranges.
+  module CellRange
+    REF = /\A\$?([A-Z]{1,3})\$?([1-9]\d*)\z/i
+
+    module_function
+
+    # Splits a range off the front of args and checks how many args follow.
+    # Returns [[first_row, first_col, last_row, last_col], the args after it].
+    def split(args, following = 0..0)
+      range, rest = parse(args)
+      unless following.cover?(rest.size)
+        raise ArgumentError,
+              "wrong number of arguments after the cell range (given #{rest.size}, expected #{following})"
+      end
+
+      [range, rest]
+    end
+
+    def parse(args)
+      case args
+      in [Integer, Integer, Integer, Integer, *rest] then [args.first(4), rest]
+      in [String => ref, *rest] then [excel(ref), rest]
+      in [Integer | Range => rows, Integer | Range => cols, *rest]
+        [rows_and_cols(rows, cols), rest]
+      else
+        raise ArgumentError, "expected a cell range: (first_row, first_col, last_row, last_col), " \
+                             "\"A1:D10\" or (rows, cols); got #{args.inspect}"
+      end
+    end
+
+    def rows_and_cols(rows, cols)
+      first_row, last_row = bounds(rows)
+      first_col, last_col = bounds(cols)
+      [first_row, first_col, last_row, last_col]
+    end
+
+    # "A1:D10", "$A$1:$D$10" or a single "B2".
+    def excel(ref)
+      cells = cell_matches(ref)
+      rows = cells.map { |m| m[2].to_i - 1 }
+      cols = cells.map { |m| column(m[1]) }
+      [rows.min, cols.min, rows.max, cols.max]
+    end
+
+    def cell_matches(ref)
+      cells = ref.split(":", -1).map { |cell| REF.match(cell) }
+      return cells if (1..2).cover?(cells.size) && cells.all?
+
+      raise ArgumentError, "invalid cell range #{ref.inspect}: use e.g. \"A1:D10\" or \"B2\""
+    end
+
+    # "A" => 0, "AA" => 26.
+    def column(letters)
+      letters.upcase.each_char.reduce(0) { |n, c| (n * 26) + c.ord - 64 } - 1
+    end
 
     # [first, last] of an index or a Range.
     def bounds(indexes)
@@ -230,6 +298,7 @@ module FastXlsx
       [first, last]
     end
   end
+  private_constant :CellRange
 
   # Cell style, e.g. Format.new(bold: true). Pass to Worksheet#write.
   class Format

@@ -426,6 +426,50 @@ class TestFastXlsx < Minitest::Test
     assert_equal "1", Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.at("cols col[min='2']")["outlineLevel"]
   end
 
+  def autofilter_ref(*range)
+    wb = FastXlsx::Workbook.new
+    assert_kind_of FastXlsx::Worksheet, wb.add_worksheet.autofilter(*range)
+    Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.at("autoFilter")["ref"]
+  end
+
+  # Four 0-based numbers, an Excel reference, or rows and columns as Integers or Ranges.
+  def test_ranges_in_excel_or_ruby_style
+    assert_equal "A1:D101", autofilter_ref(0, 0, 100, 3)
+    assert_equal "A1:D101", autofilter_ref("A1:D101")
+    assert_equal "A1:D101", autofilter_ref("$a$1:$d$101")
+    assert_equal "A1:D101", autofilter_ref("D101:A1")
+    assert_equal "A1:D101", autofilter_ref(0..100, 0..3)
+    assert_equal "AA2", autofilter_ref("AA2")
+    assert_equal "B3", autofilter_ref(2, 1)
+  end
+
+  def test_range_methods_take_every_range_style
+    red = FastXlsx::Format.new(font_color: "#9C0006")
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.merge_range(0, 0..3, "Q3 report")
+    ws.merge_range("A3:B3", 5, red)
+    ws.conditional_format("B5:B100", type: :cell, criteria: :<, value: 0, format: red)
+    ws.data_validation(4..99, 2, type: :whole_number, criteria: :>, value: 0)
+    ws.add_table("E5:F7", columns: %w[A B])
+
+    assert_equal %w[A1:D1 A3:B3], Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.css("mergeCell").map { |m| m["ref"] }
+    assert_equal [["Q3 report"], [], [5]], rows(wb).first(3).map(&:compact)
+    assert_equal "B5:B100", conditional_formats(wb).first[:sqref]
+    assert_equal "C5:C100", data_validations(wb).first[:sqref]
+    assert_equal "E5:F7", table(wb)[:ref]
+  end
+
+  def test_invalid_range_references_raise
+    ws = FastXlsx::Workbook.new.add_worksheet
+    ["A0", "1A", "A1:", "", "A1:B2:C3", "A:A"].each do |ref|
+      error = assert_raises(ArgumentError, ref) { ws.autofilter(ref) }
+      assert_match(/cell range/, error.message, ref)
+    end
+    error = assert_raises(ArgumentError) { ws.autofilter(0..1) } # columns missing
+    assert_match(/cell range/, error.message)
+  end
+
   def test_freeze_panes_freezes_rows_above_and_columns_left
     wb = FastXlsx::Workbook.new
     wb.add_worksheet.freeze_panes(1, 2)

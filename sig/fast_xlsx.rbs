@@ -63,7 +63,14 @@ module FastXlsx
     def column_width: (Integer | Range[Integer] columns, Numeric width) -> self
     def column_format: (Integer | Range[Integer] columns, Format format) -> self
     def autofit: () -> self
+    # A cell range: four 0-based numbers, an Excel reference ("A1:D10"), or
+    # rows and columns as Integers or Ranges. Methods with options take it as
+    # *cell_range so the keywords can follow.
+    type indexes = Integer | Range[Integer]
+    type cell_range = Integer | String | Range[Integer]
     def autofilter: (Integer first_row, Integer first_col, Integer last_row, Integer last_col) -> self
+                  | (String range) -> self
+                  | (indexes rows, indexes cols) -> self
     def freeze_panes: (Integer row, Integer col) -> self
     def row_height: (Integer row, Numeric height) -> self
     def page_breaks: (Array[Integer] rows) -> self
@@ -79,11 +86,13 @@ module FastXlsx
     def group_columns: (Integer | Range[Integer] columns, ?collapsed: bool) -> self
     def protect: (?password: String?, ?allow: protect_action | Array[protect_action] | nil) -> self
     def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?Format? format) -> self
-    def conditional_format: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
+                   | (String range, cell value, ?Format? format) -> self
+                   | (indexes rows, indexes cols, cell value, ?Format? format) -> self
+    def conditional_format: (*cell_range range,
                              type: :cell | :text | :formula | :data_bar | :color_scale,
                              ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
                              ?format: Format, ?colors: 2 | 3) -> self
-    def data_validation: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
+    def data_validation: (*cell_range range,
                           type: :list | :whole_number | :decimal | :text_length,
                           ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
                           ?input_title: String, ?input_message: String,
@@ -98,7 +107,7 @@ module FastXlsx
                        ?width: Integer, ?height: Integer) -> self
     type table_column = String | { header: String, ?total: Symbol, ?total_label: String, ?format: Format }
 
-    def add_table: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
+    def add_table: (*cell_range range,
                     ?columns: Array[table_column], ?style: Symbol, ?name: String,
                     ?total_row: bool, ?banded_rows: bool, ?autofilter: bool) -> self
     def name: () -> String
