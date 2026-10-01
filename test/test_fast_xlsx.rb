@@ -55,12 +55,48 @@ class TestFastXlsx < Minitest::Test
     assert_equal [["a", nil, "c"]], rows(wb)
   end
 
+  # The numbers stored in row 1 of sheet 1, whatever their format.
+  def serials(workbook)
+    sheet_doc(workbook).css("sheetData row[r='1'] c v").map { |v| Float(v.text) }
+  end
+
+  # Without a number format, Excel would show a date as its serial number.
+  def test_dates_and_times_get_a_default_format
+    %i[standard constant].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      wb.add_worksheet << [Date.new(2024, 2, 29), Time.utc(2024, 2, 29, 13, 30), DateTime.new(2024, 2, 29, 13, 30)]
+
+      xlsx = open_xlsx(wb)
+      assert_equal ["yyyy-mm-dd", "yyyy-mm-dd hh:mm:ss", "yyyy-mm-dd hh:mm:ss"],
+                   (1..3).map { |col| xlsx.excelx_format(1, col) }, "memory: #{memory}"
+      assert_equal Date.new(2024, 2, 29), xlsx.cell(1, 1)
+    end
+  end
+
+  # The cell's own format, its table column's and its column's all win.
+  def test_default_date_format_gives_way_to_other_formats
+    hhmm = FastXlsx::Format.new(num_format: "hh:mm")
+    dmy = FastXlsx::Format.new(num_format: "dd/mm/yyyy")
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.column_format(1, dmy)
+    ws << [Time.utc(2024, 2, 29, 13, 30), Date.new(2024, 2, 29)]
+    ws.write(1, 0, Time.utc(2024, 2, 29, 13, 30), hhmm)
+    ws.add_table(3, 2, 5, 2, columns: [{ header: "When", format: hhmm }])
+    ws.write(4, 2, Time.utc(2024, 2, 29, 13, 30))
+    ws.merge_range("E1:F1", Date.new(2024, 2, 29))
+
+    xlsx = open_xlsx(wb)
+    assert_equal ["yyyy-mm-dd hh:mm:ss", "dd/mm/yyyy", "hh:mm", "hh:mm", "yyyy-mm-dd"],
+                 [[1, 1], [1, 2], [2, 1], [5, 3], [1, 5]].map { |r, c| xlsx.excelx_format(r, c) }
+  end
+
   def test_time_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Time.utc(2000, 1, 1, 12)]
 
     # 2000-01-01 is serial 36526 in the 1900 date system; noon adds 0.5.
-    assert_equal [[36_526.5]], rows(wb)
+    assert_equal [36_526.5], serials(wb)
   end
 
   def test_time_uses_its_own_wall_clock_time
@@ -68,14 +104,14 @@ class TestFastXlsx < Minitest::Test
     wb.add_worksheet << [Time.new(2000, 1, 1, 18, 0, 0, "+08:00"), Time.new(2000, 1, 1, 6, 0, 0, "-05:00")]
 
     # 18:00 and 06:00 local, whatever their offsets from UTC.
-    assert_equal [[36_526.75, 36_526.25]], rows(wb)
+    assert_equal [36_526.75, 36_526.25], serials(wb)
   end
 
   def test_date_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Date.new(2000, 1, 1)]
 
-    assert_equal [[36_526]], rows(wb)
+    assert_equal [36_526], serials(wb)
   end
 
   # Excel's 1900 date system includes a non-existent 1900-02-29 (serial 60),
@@ -85,7 +121,7 @@ class TestFastXlsx < Minitest::Test
     wb.add_worksheet << [Date.new(1900, 1, 1), Date.new(1900, 2, 28), Date.new(1900, 3, 1),
                          Time.utc(1900, 1, 1, 12), Time.utc(1900, 3, 1, 12)]
 
-    assert_equal [[1, 59, 61, 1.5, 61.5]], rows(wb)
+    assert_equal [1, 59, 61, 1.5, 61.5], serials(wb)
   end
 
   def test_dates_before_1900_raise
@@ -100,7 +136,7 @@ class TestFastXlsx < Minitest::Test
     wb.add_worksheet << [DateTime.new(2000, 1, 1, 18, 0, 0, "+08:00")]
 
     # 18:00 local = 0.75 of a day, regardless of the +08:00 offset.
-    assert_equal [[36_526.75]], rows(wb)
+    assert_equal [36_526.75], serials(wb)
   end
 
   def test_formula_is_written_as_formula

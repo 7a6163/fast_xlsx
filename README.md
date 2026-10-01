@@ -82,6 +82,8 @@ ws.write(1, 2, Date.today, date)                         # format one cell
 
 Per-side borders override `border`. Unknown options and invalid values raise `ArgumentError`.
 
+Dates and times written without a format get `yyyy-mm-dd` or `yyyy-mm-dd hh:mm:ss`; a table column's format or `column_format` wins over that. A format you pass replaces it, so give date cells one with a `num_format` (e.g. `Format.new(bold: true, num_format: "yyyy-mm-dd")`), or Excel shows the serial number.
+
 ### Columns and filters
 
 ```ruby
@@ -250,8 +252,8 @@ Values are mapped by type:
 |---|---|
 | `Integer`, `Float`, any `Numeric` | number |
 | `String` | string |
-| `Time` | number (Excel serial date, local time) |
-| `Date`, `DateTime` | number (Excel serial date, own offset) |
+| `Time`, `DateTime` | date and time (`yyyy-mm-dd hh:mm:ss` unless formatted), in its own offset |
+| `Date` | date (`yyyy-mm-dd` unless formatted) |
 | `FastXlsx::Formula.new("SUM(A1:A9)")` | formula |
 | `FastXlsx::URL.new("https://…")`, `URL.new(url, text: "Title")` | hyperlink (optionally showing other text) |
 | `FastXlsx::RichString.new(["Total: ", bold], "1,234")` | text with a format per segment |
@@ -273,17 +275,17 @@ Apple Silicon, Ruby 4.0.5. Each library uses its own idiomatic row-append API; x
 
 | Library | Time | vs fastest | Ruby objects allocated |
 |---|---:|---:|---:|
-| **fast_xlsx** (`memory: :constant`) | **69 ms** | 1.0x | 7 |
-| **fast_xlsx** (`memory: :low`) | **78 ms** | 1.1x | 7 |
-| **fast_xlsx** | **80 ms** | 1.2x | 10 |
-| [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 171 ms | 2.5x | 561,728 |
-| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 194 ms | 2.8x | 20,079 |
-| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 | 228 ms | 3.3x | 320,076 |
-| [write_xlsx](https://github.com/cxn03651/write_xlsx) 1.15 | 583 ms | 8.4x | 1,483,899 |
-| [caxlsx](https://github.com/caxlsx/caxlsx) 4.5 | 691 ms | 10.0x | 745,122 |
-| [rubyXL](https://github.com/weshatheleopard/rubyXL) 3.4 | 2650 ms | 38.3x | 8,700,448 |
+| **fast_xlsx** (`memory: :constant`) | **77 ms** | 1.0x | 7 |
+| **fast_xlsx** (`memory: :low`) | **86 ms** | 1.1x | 7 |
+| **fast_xlsx** | **89 ms** | 1.1x | 10 |
+| [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 183 ms | 2.4x | 561,728 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 200 ms | 2.6x | 20,079 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 | 238 ms | 3.1x | 320,076 |
+| [write_xlsx](https://github.com/cxn03651/write_xlsx) 1.15 | 608 ms | 7.8x | 1,483,899 |
+| [caxlsx](https://github.com/caxlsx/caxlsx) 4.5 | 689 ms | 8.9x | 745,122 |
+| [rubyXL](https://github.com/weshatheleopard/rubyXL) 3.4 | 2755 ms | 35.6x | 8,700,448 |
 
-All outputs are 681–750 KB.
+All outputs are 689–750 KB.
 
 ### Memory
 

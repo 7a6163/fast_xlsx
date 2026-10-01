@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 
 use magnus::{
@@ -112,6 +113,8 @@ struct Worksheet {
     table_formats: RefCell<Vec<TableColumnFormat>>,
     // Merged ranges as (first_row, first_col, last_row, last_col).
     merges: RefCell<Vec<(u32, u16, u32, u16)>>,
+    // Column ranges given a format with column_format.
+    formatted_columns: RefCell<Vec<(u16, u16)>>,
 }
 
 struct TableColumnFormat {
@@ -179,6 +182,7 @@ impl Workbook {
             flushes_rows: self.constant_memory || self.low_memory,
             table_formats: RefCell::new(Vec::new()),
             merges: RefCell::new(Vec::new()),
+            formatted_columns: RefCell::new(Vec::new()),
         })
     }
 
@@ -297,6 +301,8 @@ enum CellValue {
     Empty,
     Text(String),
     Number(f64),
+    // An Excel serial date; true when it has a time of day (Time, DateTime).
+    Date(f64, bool),
     Bool(bool),
     Formula(String),
     Url(String, Option<String>),
@@ -315,7 +321,7 @@ impl CellValue {
         } else if v.is_kind_of(ruby.class_numeric()) {
             CellValue::Number(f64::try_convert(v)?)
         } else if v.is_kind_of(ruby.class_time()) {
-            CellValue::Number(excel_time(v)?)
+            CellValue::Date(excel_time(v)?, true)
         } else if v.is_kind_of(ruby.class_true_class()) || v.is_kind_of(ruby.class_false_class()) {
             CellValue::Bool(v.to_bool())
         } else if v.is_kind_of(ruby.get_inner(&FORMULA)) {
@@ -333,12 +339,27 @@ impl CellValue {
             })?;
             CellValue::Rich(parts)
         } else if v.respond_to("jd", false)? {
-            CellValue::Number(excel_date(v)?)
+            // Date has no #hour; DateTime does.
+            CellValue::Date(excel_date(v)?, v.respond_to("hour", false)?)
         } else {
             CellValue::Text(v.funcall("to_s", ())?)
         };
         value.check()?;
         Ok(value)
+    }
+
+    // The format for a value written without one: without a number format
+    // Excel shows a date as its serial number.
+    fn default_format(&self) -> Option<&'static rust_xlsxwriter::Format> {
+        static DATE: LazyLock<rust_xlsxwriter::Format> =
+            LazyLock::new(|| rust_xlsxwriter::Format::new().set_num_format("yyyy-mm-dd"));
+        static DATE_TIME: LazyLock<rust_xlsxwriter::Format> =
+            LazyLock::new(|| rust_xlsxwriter::Format::new().set_num_format("yyyy-mm-dd hh:mm:ss"));
+        match self {
+            CellValue::Date(_, false) => Some(&DATE),
+            CellValue::Date(_, true) => Some(&DATE_TIME),
+            _ => None,
+        }
     }
 
     // Rejects what the writer would, so a row or merge fails before anything
@@ -371,7 +392,7 @@ impl CellValue {
         match self {
             CellValue::Empty => Ok(()),
             CellValue::Text(s) => emit(ws, row, col, s.as_str(), format),
-            CellValue::Number(n) => emit(ws, row, col, *n, format),
+            CellValue::Number(n) | CellValue::Date(n, _) => emit(ws, row, col, *n, format),
             CellValue::Bool(b) => emit(ws, row, col, *b, format),
             CellValue::Formula(f) => emit(
                 ws,
@@ -950,6 +971,28 @@ impl Worksheet {
         })
     }
 
+    // The format a value is written with: its own, else its table column's,
+    // else its type's default (dates) unless column_format covers the column,
+    // whose format rust_xlsxwriter applies to cells written without one.
+    fn format_for<'a>(
+        &self,
+        tables: &'a [TableColumnFormat],
+        row: u32,
+        col: u16,
+        own: Option<&'a rust_xlsxwriter::Format>,
+        value: &CellValue,
+    ) -> Option<&'a rust_xlsxwriter::Format> {
+        Self::cell_format(tables, row, col, own).or_else(|| {
+            value.default_format().filter(|_| {
+                !self
+                    .formatted_columns
+                    .borrow()
+                    .iter()
+                    .any(|&(first, last)| (first..=last).contains(&col))
+            })
+        })
+    }
+
     fn write_row(
         &self,
         ruby: &Ruby,
@@ -976,7 +1019,7 @@ impl Worksheet {
             // Values were checked when converted, so only a bad row number
             // fails here, and it fails on the first cell.
             for (col, value, format) in &values {
-                let format = Self::cell_format(&tables, row, *col, format.as_deref());
+                let format = self.format_for(&tables, row, *col, format.as_deref(), value);
                 value.write(ws, row, *col, format)?;
             }
             Ok(())
@@ -1025,7 +1068,7 @@ impl Worksheet {
                 ws,
                 row,
                 col,
-                Self::cell_format(&tables, row, col, format.map(|f| &*f.0)),
+                rb_self.format_for(&tables, row, col, format.map(|f| &*f.0), &value),
             )
         })?;
         rb_self.advance(row);
@@ -1070,7 +1113,9 @@ impl Worksheet {
             ws.set_column_range_format(first, last, &format.0)
                 .map(|_| ())
                 .map_err(xerr)
-        })
+        })?;
+        self.formatted_columns.borrow_mut().push((first, last));
+        Ok(())
     }
 
     fn autofilter(
@@ -1193,7 +1238,8 @@ impl Worksheet {
         }
         let value = CellValue::from_ruby(ruby, v)?;
         let tables = rb_self.table_formats.borrow();
-        let format = Self::cell_format(&tables, first_row, first_col, format.map(|f| &*f.0));
+        let format =
+            rb_self.format_for(&tables, first_row, first_col, format.map(|f| &*f.0), &value);
         let default = rust_xlsxwriter::Format::new();
         rb_self.with_ws(|ws| {
             // The value was checked when converted, so once the range is
