@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- The API is frozen for 1.0: 0.8.x releases only fix bugs. The README states the deprecation policy.
+
 ### Added
 
 - `write` and `merge_range` also take the format as `format:`, like `append` (positional still works).

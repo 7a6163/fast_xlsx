@@ -5,7 +5,7 @@
 
 Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
-> **Status: early.** The API may still change before 1.0.
+> **Status: release candidate.** The API is frozen as of 0.8: 0.8.x releases only fix bugs, and 1.0 follows once it has been in real use without needing changes.
 
 **Contents:** [Installation](#installation) · [Getting started](#getting-started) · [Guide](#guide) · [Performance](#performance) · [Support and versioning](#support-and-versioning) · [Development](#development)
 
@@ -444,6 +444,7 @@ BUNDLE_GEMFILE=bench/Gemfile /usr/bin/time -l bundle exec ruby bench/memory.rb f
 - **Ruby:** CRuby 3.3 and later. A Ruby version is dropped only after it reaches its end of life, and only in a minor release. JRuby and TruffleRuby are not supported (this is a native extension).
 - **Precompiled gems:** Linux (x86_64 and aarch64, glibc and musl; ARM musl), macOS (arm64 and x86_64) and Windows (x64). Before each release the Linux x86_64, macOS arm64 and Windows gems are installed and loaded on Ruby 3.3, 3.4 and 4.0. Other platforms build from source and need a Rust toolchain.
 - **Versions:** from 1.0, [Semantic Versioning](https://semver.org): no breaking API change before 2.0. Until then a minor release (0.x.0) can change behaviour; the [changelog](CHANGELOG.md) lists every change under "Changed".
+- **Deprecations:** from 1.0, a method or option to be removed first warns (`Warning[:deprecated]`) for at least one minor release, with the CHANGELOG naming its replacement; it goes only in the next major version.
 - **Output:** `.xlsx` files that open in Excel 2007 and later, LibreOffice and Google Sheets. Updating rust_xlsxwriter can change the bytes of the file but not what it contains.
 
 ## Development
