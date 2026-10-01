@@ -944,8 +944,8 @@ class TestFastXlsx < Minitest::Test
 
   def test_header_and_footer_over_255_characters_raise
     ws = FastXlsx::Workbook.new.add_worksheet
-    assert_raises(ArgumentError) { ws.page_header("x" * 256) }
-    assert_raises(ArgumentError) { ws.page_footer("x" * 256) }
+    assert_raises(FastXlsx::Error) { ws.page_header("x" * 256) } # text over Excel's limit, like cell text
+    assert_raises(FastXlsx::Error) { ws.page_footer("x" * 256) }
     ws.page_header("&[Page]#{"x" * 253}") # &[Page] counts as &P, so this is 255
   end
 
@@ -1209,7 +1209,7 @@ class TestFastXlsx < Minitest::Test
   def test_a_row_with_more_columns_than_excel_allows_leaves_no_cells
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
-    assert_raises(ArgumentError) { ws << Array.new(16_385, 1) }
+    assert_raises(RangeError) { ws << Array.new(16_385, 1) } # a column outside the sheet
     ws << ["z"]
 
     assert_equal [["z"]], rows(wb)
@@ -1227,7 +1227,7 @@ class TestFastXlsx < Minitest::Test
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
     ws.write(0, 0, "keep")
-    assert_raises(FastXlsx::Error) { ws.merge_range(0, 0, 0, 0, "x") }
+    assert_raises(ArgumentError) { ws.merge_range(0, 0, 0, 0, "x") }
 
     assert_equal [["keep"]], rows(wb)
   end
@@ -1238,7 +1238,7 @@ class TestFastXlsx < Minitest::Test
     wb = FastXlsx::Workbook.new(memory: :constant)
     ws = wb.add_worksheet
     ws.write(0, 0, "a")
-    assert_raises(FastXlsx::Error) { ws.merge_range(5, 0, 4, 0, "x") }
+    assert_raises(ArgumentError) { ws.merge_range(5, 0, 4, 0, "x") } # reversed
     ws.write(0, 1, "b")
 
     assert_equal [%w[a b]], rows(wb)
@@ -1613,6 +1613,20 @@ class TestFastXlsx < Minitest::Test
      -> { ws.row_height(0, 500) }, -> { ws.zoom(500) }].each_with_index do |call, i|
       assert_raises(ArgumentError, "case #{i}", &call)
     end
+  end
+
+  # Reversed ranges, whatever their form, and sizes Excel can't use are values
+  # that aren't allowed.
+  def test_reversed_ranges_and_bad_sizes_raise_argument_error
+    png = -> { StringIO.new(PNG_1X1) } # a fresh one per call: reading empties it
+    ws = FastXlsx::Workbook.new.add_worksheet
+    [-> { ws.autofilter(5, 0, 0, 2) }, -> { ws.add_table(3, 0, 0, 2) },
+     -> { ws.data_validation(5, 0, 1, 0, type: :list, value: %w[a]) }, -> { ws.merge_range(3, 0, 0, 1, "x") },
+     -> { ws.conditional_format(5, 0, 1, 0, type: :data_bar) },
+     -> { ws.insert_image(0, 0, png.call, width: Float::NAN) }, -> { ws.insert_image(0, 0, png.call, scale: -1) },
+     -> { ws.insert_image(0, 0, png.call, height: -10) }, -> { FastXlsx::Format.new(font_size: Float::NAN) },
+     -> { FastXlsx::Format.new(font_size: -1) }, -> { ws.margins(left: -5) }, -> { ws.margins(top: Float::NAN) }]
+      .each_with_index { |call, i| assert_raises(ArgumentError, "case #{i}", &call) }
   end
 
   # Like Ruby's own methods, numbers are converted with to_int.

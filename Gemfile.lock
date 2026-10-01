@@ -97,6 +97,7 @@ DEPENDENCIES
   minitest (~> 5.16)
   rake (~> 13.0)
   rake-compiler
+  rbs
   roo (~> 3.0)
   rubocop (~> 1.21)
   yard

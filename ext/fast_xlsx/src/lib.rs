@@ -40,6 +40,10 @@ fn xerr(e: XlsxError) -> Error {
     let ruby = Ruby::get().unwrap();
     let class = match e {
         XlsxError::RowColumnLimitError => ruby.exception_range_error(),
+        // Values that aren't allowed, like a reversed range.
+        XlsxError::RowColumnOrderError | XlsxError::MergeRangeSingleCell => {
+            ruby.exception_arg_error()
+        }
         _ => ruby.get_inner(&ERROR),
     };
     Error::new(class, e.to_string())
@@ -47,6 +51,18 @@ fn xerr(e: XlsxError) -> Error {
 
 // Excel's limits that rust_xlsxwriter doesn't check: a negative width or
 // height hides the column or row, a larger one is capped or invalid.
+// A size that must be a finite number above 0 (NaN or a negative one would
+// be written into the file as is).
+fn check_positive(ruby: &Ruby, what: &str, size: f64) -> Result<f64, Error> {
+    if size.is_finite() && size > 0.0 {
+        return Ok(size);
+    }
+    Err(Error::new(
+        ruby.exception_arg_error(),
+        format!("invalid {what} {size}: use a number above 0"),
+    ))
+}
+
 fn check_size(ruby: &Ruby, what: &str, size: f64, max: f64) -> Result<(), Error> {
     if (0.0..=max).contains(&size) {
         return Ok(());
@@ -595,7 +611,7 @@ fn check_header_footer(ruby: &Ruby, what: &str, text: &str) -> Result<(), Error>
     let len = expanded.chars().count();
     if len > 255 {
         return Err(Error::new(
-            ruby.exception_arg_error(),
+            ruby.get_inner(&ERROR),
             format!("{what} is {len} characters; Excel allows 255"),
         ));
     }
@@ -888,7 +904,11 @@ impl Format {
                     has_num_format = true;
                     taken.set_num_format(String::try_convert(value)?)
                 }
-                "font_size" => taken.set_font_size(f64::try_convert(value)?),
+                "font_size" => taken.set_font_size(check_positive(
+                    ruby,
+                    "font_size",
+                    f64::try_convert(value)?,
+                )?),
                 "font_name" => taken.set_font_name(String::try_convert(value)?),
                 "font_color" => taken.set_font_color(color(ruby, value)?),
                 "bg_color" => taken.set_background_color(color(ruby, value)?),
@@ -1059,7 +1079,7 @@ impl Worksheet {
         each_entry(cells, |i, v| {
             if i >= MAX_COLS {
                 return Err(Error::new(
-                    ruby.exception_arg_error(),
+                    ruby.exception_range_error(),
                     format!("too many columns: Excel allows {MAX_COLS}"),
                 ));
             }
@@ -1238,17 +1258,32 @@ impl Worksheet {
         })
     }
 
-    // Inches; a negative value keeps the current margin.
+    // Inches; None keeps the current margin.
+    #[allow(clippy::too_many_arguments)]
     fn set_margins(
-        &self,
-        left: f64,
-        right: f64,
-        top: f64,
-        bottom: f64,
-        header: f64,
-        footer: f64,
+        ruby: &Ruby,
+        rb_self: &Self,
+        left: Option<f64>,
+        right: Option<f64>,
+        top: Option<f64>,
+        bottom: Option<f64>,
+        header: Option<f64>,
+        footer: Option<f64>,
     ) -> Result<(), Error> {
-        self.with_ws(|ws| {
+        // rust_xlsxwriter keeps a margin given as a negative number.
+        let inches = |margin: Option<f64>| -> Result<f64, Error> {
+            match margin {
+                None => Ok(-1.0),
+                Some(m) if m.is_finite() && m >= 0.0 => Ok(m),
+                Some(m) => Err(Error::new(
+                    ruby.exception_arg_error(),
+                    format!("invalid margin {m}: use 0 or more inches"),
+                )),
+            }
+        };
+        let (left, right, top) = (inches(left)?, inches(right)?, inches(top)?);
+        let (bottom, header, footer) = (inches(bottom)?, inches(header)?, inches(footer)?);
+        rb_self.with_ws(|ws| {
             ws.set_margins(left, right, top, bottom, header, footer);
             Ok(())
         })
@@ -1547,9 +1582,14 @@ impl Worksheet {
         )?;
         // SAFETY: the bytes are copied into the Image before any Ruby code runs.
         let mut image = Image::new_from_buffer(unsafe { bytes.as_slice() }).map_err(xerr)?;
-        let width = opt::<f64>(ruby, options, "width")?;
-        let height = opt::<f64>(ruby, options, "height")?;
-        if let Some(scale) = opt::<f64>(ruby, options, "scale")? {
+        let positive = |name: &str| -> Result<Option<f64>, Error> {
+            opt::<f64>(ruby, options, name)?
+                .map(|v| check_positive(ruby, name, v))
+                .transpose()
+        };
+        let width = positive("width")?;
+        let height = positive("height")?;
+        if let Some(scale) = positive("scale")? {
             if width.is_some() || height.is_some() {
                 return Err(Error::new(
                     ruby.exception_arg_error(),

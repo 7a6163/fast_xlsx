@@ -16,4 +16,5 @@ gem "cgi" # roo requires cgi, which Ruby 4.0 no longer bundles
 gem "roo", "~> 3.0"
 gem "rubocop", "~> 1.21"
 
+gem "rbs", require: false # type signatures in sig/: bundle exec rbs -r date -I sig validate
 gem "yard", require: false # API docs: bundle exec yard stats --list-undoc

@@ -197,6 +197,7 @@ module FastXlsx
   # @!method row_height(row, height)
   #   @param height [Numeric] points, 0..409
   #   @return [self]
+  #   @raise [ArgumentError] for a height outside 0..409
   #
   # @!method page_breaks(rows)
   #   Starts a printed page before each of these rows.
@@ -218,7 +219,7 @@ module FastXlsx
   #     unless another is activated)
   #
   # @!method zoom(percent)
-  #   @param percent [Integer] 10..400
+  #   @param percent [Integer, #to_int] 10..400
   #   @return [self]
   #
   # @!method tab_color(color)
@@ -395,8 +396,9 @@ module FastXlsx
 
     # Print margins in inches; margins not given keep their current value.
     # @return [self]
+    # @raise [ArgumentError] for a negative or NaN margin
     def margins(left: nil, right: nil, top: nil, bottom: nil, header: nil, footer: nil)
-      _margins(*[left, right, top, bottom, header, footer].map { |m| m || -1.0 })
+      _margins(left, right, top, bottom, header, footer)
       self
     end
 
