@@ -142,6 +142,19 @@ impl Workbook {
         self.inner.lock().unwrap().save(path).map_err(xerr)
     }
 
+    // "Name" for the whole workbook, "Sheet1!Name" for one sheet. Duplicate
+    // names and unknown sheets are reported when saving, since sheets can be
+    // added after the name.
+    fn define_name(rb_self: Obj<Self>, name: String, formula: String) -> Result<Obj<Self>, Error> {
+        rb_self
+            .inner
+            .lock()
+            .unwrap()
+            .define_name(name, &formula)
+            .map_err(xerr)?;
+        Ok(rb_self)
+    }
+
     fn set_properties(ruby: &Ruby, rb_self: &Self, fields: RHash) -> Result<(), Error> {
         let mut props = DocProperties::new();
         fields.foreach(|key: Symbol, value: String| {
@@ -1561,6 +1574,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     wb.define_method("_add_worksheet", method!(Workbook::add_worksheet, 1))?;
     wb.define_method("to_xlsx", method!(Workbook::to_xlsx, 0))?;
     wb.define_method("_save", method!(Workbook::save, 1))?;
+    wb.define_method("define_name", method!(Workbook::define_name, 2))?;
     wb.define_method("_properties", method!(Workbook::set_properties, 1))?;
 
     let ws = module.define_class("Worksheet", ruby.class_object())?;

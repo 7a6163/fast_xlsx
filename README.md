@@ -116,6 +116,15 @@ ws.group_columns(2..3, collapsed: true)  # columns C–D, collapsed until expand
 
 `group_rows` needs `memory: :standard`: in `:constant` / `:low` mode rust_xlsxwriter writes rows without their outline level, so it raises. `group_columns` works in every mode.
 
+### Defined names
+
+```ruby
+wb.define_name("Rate", "=0.96")                      # workbook-wide; use as =A1*Rate
+wb.define_name("Report!Sales", "=Report!$B$2:$B$13") # only on the Report sheet
+```
+
+Invalid names raise `FastXlsx::Error` right away; duplicate names, and names for a sheet that doesn't exist, raise when saving.
+
 ### Protection
 
 ```ruby

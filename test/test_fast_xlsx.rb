@@ -1225,6 +1225,42 @@ class TestFastXlsx < Minitest::Test
     assert_equal %w[Data], open_xlsx(wb).sheets
   end
 
+  def defined_names(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    Nokogiri::XML(zip.read("xl/workbook.xml")).remove_namespaces!.css("definedName")
+            .map { |n| [n["name"], n["localSheetId"], n.text] }
+  end
+
+  def test_define_name_for_the_workbook_and_for_one_sheet
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet("Data")
+
+    assert_same wb, wb.define_name("Rate", "=0.96")
+    wb.define_name("Data!Sales", "=Data!$A$1:$A$9")
+
+    assert_equal [["Sales", "0", "Data!$A$1:$A$9"], ["Rate", nil, "0.96"]].sort, defined_names(wb).sort
+  end
+
+  def test_define_name_rejects_invalid_names
+    wb = FastXlsx::Workbook.new
+    ["has space", "A1", "!x"].each do |name|
+      assert_raises(FastXlsx::Error, name) { wb.define_name(name, "=1") }
+    end
+  end
+
+  # Both depend on what else the workbook holds by the time it is saved.
+  def test_duplicate_or_unknown_sheet_names_raise_when_saving
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet
+    wb.define_name("Rate", "=1").define_name("rate", "=2")
+    assert_raises(FastXlsx::Error) { wb.to_xlsx }
+
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet
+    wb.define_name("Nope!Rate", "=1")
+    assert_raises(FastXlsx::Error) { wb.to_xlsx }
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")
