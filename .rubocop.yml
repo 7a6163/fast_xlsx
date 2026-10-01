@@ -28,3 +28,8 @@ Metrics/ParameterLists:
 Lint/AmbiguousBlockAssociation:
   Exclude:
     - test/**/*
+
+# Worksheet is the API: one short method per Excel feature.
+Metrics/ClassLength:
+  Exclude:
+    - lib/fast_xlsx.rb

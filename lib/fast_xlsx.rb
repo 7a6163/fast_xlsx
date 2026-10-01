@@ -446,6 +446,43 @@ module FastXlsx
       _protect(password, Array(allow))
     end
 
+    # A range users can still edit on a protected sheet, optionally with its
+    # own password.
+    # @overload unprotect_range(*range, name: nil, password: nil)
+    #   @param name [String, nil] shown in Excel's "Allow Edit Ranges"
+    # @return [self]
+    def unprotect_range(*range, name: nil, password: nil)
+      _unprotect_range(*CellRange.split(range).first, name, password)
+    end
+
+    # The cells selected when the file opens.
+    # @param range a cell range (see {Worksheet})
+    # @return [self]
+    def selection(*range)
+      _selection(*CellRange.split(range).first)
+    end
+
+    # The cell scrolled to the top left when the file opens.
+    # @param cell (row, col) or "B2"
+    # @return [self]
+    def top_left_cell(*cell)
+      _top_left_cell(*CellRange.cell(cell).first(2))
+    end
+
+    # Turns off one of Excel's warnings (green triangles) in the range, e.g.
+    # for codes stored as text. Excel allows one per range.
+    # @overload ignore_error(*range, error)
+    #   @param error [Symbol] :number_stored_as_text, :formula_error,
+    #     :formula_differs, :formula_refers_to_empty_cells,
+    #     :formula_omits_cells, :data_validation_error,
+    #     :unlocked_cells_with_formula, :inconsistent_column_formula
+    # @return [self]
+    # @raise [FastXlsx::Error] when the range already has one
+    def ignore_error(*args)
+      range, (error, *) = CellRange.split(args, 1..1)
+      _ignore_error(*range, error)
+    end
+
     # @param rows [Integer, Range<Integer>]
     # @return [self]
     # @raise [FastXlsx::Error] in :constant / :low mode, for rows already on disk

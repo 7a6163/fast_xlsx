@@ -101,6 +101,9 @@ ws.zoom(150)                # 10..400 percent
 ws.tab_color("#C00000")
 ws.hide_gridlines
 ws.activate                 # Excel opens on this sheet (un-hides it if hidden)
+ws.selection("B2:C3")       # the cells selected when it opens
+ws.top_left_cell("A50")     # and the cell scrolled to the top left
+ws.ignore_error("A2:A1000", :number_stored_as_text) # no green triangles (one kind per range)
 other.hide                  # the sheet Excel opens on can't be hidden: activate another one first
 
 ws.page_setup(landscape: true, paper: :a4,  # or :letter, :legal, :tabloid, :a3, :a5, Excel's paper number, 0 = printer default
@@ -167,6 +170,7 @@ input = FastXlsx::Format.new(locked: false)
 ws.write(1, 1, 0, input)                                  # B2 stays editable
 ws.protect                                                # lock everything else
 ws.protect(password: "secret", allow: %i[sort use_autofilter]) # or with a password and allowed actions
+ws.unprotect_range("B2:D10", name: "Inputs")               # a range users can still edit (optional password:)
 ```
 
 `allow:` takes `:format_cells`, `:format_columns`, `:format_rows`, `:insert_columns`, `:insert_rows`, `:insert_links`, `:delete_columns`, `:delete_rows`, `:sort`, `:use_autofilter`, `:use_pivot_tables`, `:edit_scenarios`, `:edit_objects`. The password only stops editing in Excel; it does not encrypt the file.

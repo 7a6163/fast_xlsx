@@ -66,6 +66,14 @@ module FastXlsx
     def hide_columns: (Integer | Range[Integer] columns) -> self
     def row_format: (Integer | Range[Integer] rows, Format format) -> self
     def default_row_height: (Numeric height) -> self
+    def selection: (*cell_range range) -> self
+    def top_left_cell: (Integer row, Integer col) -> self
+                     | (String cell) -> self
+    type ignorable_error = :number_stored_as_text | :formula_error | :formula_differs | :formula_refers_to_empty_cells
+                         | :formula_omits_cells | :data_validation_error | :unlocked_cells_with_formula
+                         | :inconsistent_column_formula
+    def ignore_error: (*cell_range | ignorable_error args) -> self
+    def unprotect_range: (*cell_range range, ?name: String?, ?password: String?) -> self
     def column_format: (Integer | Range[Integer] columns, Format format) -> self
     def autofit: () -> self
     # A cell range: four 0-based numbers, an Excel reference ("A1:D10"), or

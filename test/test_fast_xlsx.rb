@@ -634,6 +634,43 @@ class TestFastXlsx < Minitest::Test
     assert_raises(ArgumentError) { ws.default_row_height(-1) }
   end
 
+  def test_selection_and_top_left_cell
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_same ws, ws.selection("B2:C3")
+    assert_same ws, ws.top_left_cell(49, 0)
+
+    doc = sheet_doc(wb)
+    assert_equal "A50", doc.at("sheetView")["topLeftCell"]
+    assert_equal %w[B2 B2:C3], doc.at("selection").to_h.values_at("activeCell", "sqref")
+  end
+
+  # Turns off Excel's green triangles, e.g. for codes stored as text.
+  def test_ignore_error
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_same ws, ws.ignore_error("A1:A100", :number_stored_as_text)
+    ws.ignore_error(0, 1, 99, 1, :formula_error)
+
+    ignored = sheet_doc(wb).css("ignoredErrors ignoredError").map(&:to_h)
+    assert_includes ignored, { "sqref" => "A1:A100", "numberStoredAsText" => "1" }
+    assert_includes ignored, { "sqref" => "B1:B100", "evalError" => "1" }
+    error = assert_raises(ArgumentError) { ws.ignore_error("C1", :typo) }
+    assert_match(/:number_stored_as_text/, error.message)
+    assert_raises(ArgumentError) { ws.ignore_error("C1") } # which error?
+    assert_raises(FastXlsx::Error) { ws.ignore_error("A1:A100", :formula_error) } # one rule per range
+  end
+
+  def test_unprotect_range
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.protect
+    assert_same ws, ws.unprotect_range("B2:D10", name: "Inputs", password: "password")
+
+    range = sheet_doc(wb).at("protectedRanges protectedRange")
+    assert_equal %w[B2:D10 Inputs 83AF], range.to_h.values_at("sqref", "name", "password")
+  end
+
   def test_freeze_panes_freezes_rows_above_and_columns_left
     wb = FastXlsx::Workbook.new
     wb.add_worksheet.freeze_panes(1, 2)

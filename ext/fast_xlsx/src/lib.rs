@@ -13,7 +13,7 @@ use rust_xlsxwriter::{
     ConditionalFormatCell, ConditionalFormatCellRule, ConditionalFormatDataBar,
     ConditionalFormatFormula, ConditionalFormatText, ConditionalFormatTextRule,
     ConditionalFormatValue, DataValidation, DataValidationRule, FormatAlign, FormatBorder,
-    FormatScript, FormatUnderline, IntoDataValidationValue, IntoExcelData, XlsxError,
+    FormatScript, FormatUnderline, IgnoreError, IntoDataValidationValue, IntoExcelData, XlsxError,
 };
 
 use rust_xlsxwriter::{
@@ -793,6 +793,29 @@ const PROTECTION_ALLOW: &[(&str, ProtectionFlag)] = &[
     ("edit_objects", |o| &mut o.edit_objects),
 ];
 
+// Not IgnoreError::TwoDigitTextYear: rust_xlsxwriter 0.99 writes it as
+// "TwoDigitTextYear", not the schema's "twoDigitTextYear", which Excel would
+// flag as damaged content. Add it once that is fixed upstream.
+const IGNORE_ERRORS: &[(&str, IgnoreError)] = &[
+    ("number_stored_as_text", IgnoreError::NumberStoredAsText),
+    ("formula_error", IgnoreError::FormulaError),
+    ("formula_differs", IgnoreError::FormulaDiffers),
+    (
+        "formula_refers_to_empty_cells",
+        IgnoreError::FormulaRefersToEmptyCells,
+    ),
+    ("formula_omits_cells", IgnoreError::FormulaOmitsCells),
+    ("data_validation_error", IgnoreError::DataValidationError),
+    (
+        "unlocked_cells_with_formula",
+        IgnoreError::UnlockedCellsWithFormula,
+    ),
+    (
+        "inconsistent_column_formula",
+        IgnoreError::InconsistentColumnFormula,
+    ),
+];
+
 // Excel's paper size codes; page_setup also takes the number itself.
 const PAPER_SIZES: &[(&str, u8)] = &[
     ("letter", 1),
@@ -1238,6 +1261,66 @@ impl Worksheet {
                 ws.set_row_hidden(row).map_err(xerr)?;
             }
             Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
+    fn selection(
+        rb_self: Obj<Self>,
+        fr: u32,
+        fc: u16,
+        lr: u32,
+        lc: u16,
+    ) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| ws.set_selection(fr, fc, lr, lc).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
+    fn top_left_cell(rb_self: Obj<Self>, row: u32, col: u16) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| ws.set_top_left_cell(row, col).map(|_| ()).map_err(xerr))?;
+        Ok(rb_self)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn ignore_error(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        fr: u32,
+        fc: u16,
+        lr: u32,
+        lc: u16,
+        kind: Value,
+    ) -> Result<Obj<Self>, Error> {
+        let error = choice(ruby, "error to ignore", kind, IGNORE_ERRORS)?;
+        rb_self.with_ws(|ws| {
+            ws.ignore_error_range(fr, fc, lr, lc, error)
+                .map(|_| ())
+                .map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn unprotect_range(
+        rb_self: Obj<Self>,
+        fr: u32,
+        fc: u16,
+        lr: u32,
+        lc: u16,
+        name: Option<String>,
+        password: Option<String>,
+    ) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| {
+            ws.unprotect_range_with_options(
+                fr,
+                fc,
+                lr,
+                lc,
+                name.as_deref().unwrap_or(""),
+                password.as_deref().unwrap_or(""),
+            )
+            .map(|_| ())
+            .map_err(xerr)
         })?;
         Ok(rb_self)
     }
@@ -2115,6 +2198,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "default_row_height",
         method!(Worksheet::default_row_height, 1),
     )?;
+    ws.define_method("_selection", method!(Worksheet::selection, 4))?;
+    ws.define_method("_top_left_cell", method!(Worksheet::top_left_cell, 2))?;
+    ws.define_method("_ignore_error", method!(Worksheet::ignore_error, 5))?;
+    ws.define_method("_unprotect_range", method!(Worksheet::unprotect_range, 6))?;
     ws.define_method("activate", method!(Worksheet::activate, 0))?;
     ws.define_method("hide", method!(Worksheet::hide, 0))?;
     ws.define_method("zoom", method!(Worksheet::zoom, 1))?;
