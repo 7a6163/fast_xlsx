@@ -33,3 +33,8 @@ Lint/AmbiguousBlockAssociation:
 Metrics/ClassLength:
   Exclude:
     - lib/fast_xlsx.rb
+
+# The README shows examples/getting_started.rb as is; keep it free of noise.
+Style/FrozenStringLiteralComment:
+  Exclude:
+    - examples/getting_started.rb

@@ -1949,6 +1949,23 @@ class TestFastXlsx < Minitest::Test
     assert_includes error.message, "titel"
   end
 
+  # The README's tutorial is examples/getting_started.rb, so it is run here.
+  def test_getting_started_example_runs_and_matches_the_readme
+    example = File.expand_path("../examples/getting_started.rb", __dir__)
+    readme = File.read(File.expand_path("../README.md", __dir__))
+    assert_includes readme, "```ruby\n#{File.read(example)}```", "README's Getting started differs from the example"
+
+    Dir.mktmpdir do |dir|
+      assert system(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), example, chdir: dir, out: File::NULL),
+             "getting_started.rb failed"
+      xlsx = Roo::Excelx.new(File.join(dir, "sales.xlsx"))
+      assert_equal "Total", xlsx.cell(6, 1)
+      assert_equal ["Region", "Product", "Units", "Price", "Sold on", "Revenue"], xlsx.row(1)
+      assert_equal %w[SUM(C2:C5) SUM(F2:F5)], [xlsx.formula(6, 3), xlsx.formula(6, 6)]
+      assert_equal "yyyy-mm-dd", xlsx.excelx_format(2, 5)
+    end
+  end
+
   def test_showcase_example_builds_one_sheet_per_feature
     Dir.mktmpdir do |dir|
       path = File.join(dir, "showcase.xlsx")
