@@ -75,7 +75,7 @@ module FastXlsx
       raise ArgumentError, "RichString needs at least one segment" if parts.empty?
 
       @segments = parts.map do |part|
-        part.is_a?(Array) ? [part[0].to_s, Format.coerce(part[1])] : [part.to_s, nil]
+        part.is_a?(Array) ? [part[0].to_s, Format._coerce(part[1])] : [part.to_s, nil]
       end.freeze
     end
   end
@@ -257,7 +257,7 @@ module FastXlsx
     # wrapper. Other forms come here.
     def _write_ref(*args)
       row, col, (value, format) = CellRange.cell(args, 1..2)
-      _write(row, col, value, Format.coerce(format))
+      _write(row, col, value, Format._coerce(format))
       self
     end
     private :_write_ref
@@ -269,6 +269,7 @@ module FastXlsx
     def []=(*cell, value)
       row, col = CellRange.cell(cell)
       write(row, col, value)
+      value
     end
 
     # Appends a row after the last row written.
@@ -277,7 +278,7 @@ module FastXlsx
     #   one per cell
     # @return [self]
     def append(values, format: nil)
-      _append(values, format.is_a?(Array) ? format.map { |f| Format.coerce(f) } : Format.coerce(format))
+      _append(values, format.is_a?(Array) ? format.map { |f| Format._coerce(f) } : Format._coerce(format))
     end
 
     # @param columns [Integer, Range<Integer>]
@@ -314,7 +315,7 @@ module FastXlsx
     # @raise [FastXlsx::Error] when it overlaps an earlier merge
     def merge_range(*args)
       range, (value, format) = CellRange.split(args, 1..2)
-      _merge_range(*range, value, Format.coerce(format))
+      _merge_range(*range, value, Format._coerce(format))
     end
 
     # Highlights cells in the range by rule; see the README for each type's
@@ -327,7 +328,7 @@ module FastXlsx
     # @option options [Integer] :colors 2 or 3 (:color_scale)
     # @return [self]
     def conditional_format(*range, type:, **options)
-      options[:format] = Format.coerce(options[:format]) if options.key?(:format)
+      options[:format] = Format._coerce(options[:format]) if options.key?(:format)
       _conditional_format(*CellRange.split(range).first, { type: type, **options })
     end
 
@@ -391,7 +392,7 @@ module FastXlsx
     def add_table(*range, **options)
       if options[:columns].is_a?(Array)
         options[:columns] = options[:columns].map do |column|
-          column.is_a?(Hash) && column.key?(:format) ? column.merge(format: Format.coerce(column[:format])) : column
+          column.is_a?(Hash) && column.key?(:format) ? column.merge(format: Format._coerce(column[:format])) : column
         end
       end
       _add_table(*CellRange.split(range).first, options)
@@ -539,7 +540,7 @@ module FastXlsx
     # @return [self]
     # @raise [FastXlsx::Error] in :constant / :low mode, for rows already on disk
     def row_format(rows, format)
-      _row_format(*CellRange.bounds(rows), Format.coerce(format))
+      _row_format(*CellRange.bounds(rows), Format._coerce(format))
       self
     end
 
@@ -548,7 +549,7 @@ module FastXlsx
     # @param format [Format, Hash]
     # @return [self]
     def column_format(columns, format)
-      _column_format(*CellRange.bounds(columns), Format.coerce(format))
+      _column_format(*CellRange.bounds(columns), Format._coerce(format))
       self
     end
   end
@@ -662,11 +663,14 @@ module FastXlsx
     #   border_color:, locked:, hidden:
     # @raise [ArgumentError] for an unknown option or an invalid value
     def self.new(**options)
+      # String keys too (options from JSON or YAML); values are copied, so the
+      # format can't change behind the file's back.
+      options = options.to_h { |key, value| [key.to_sym, value.frozen? ? value : value.dup.freeze] }.freeze
       # Apply border: first so border_left: etc. override it whatever the order.
       ordered = options.key?(:border) ? { border: options[:border], **options.except(:border) } : options
       format = _new(ordered)
-      format.instance_variable_set(:@options, options.dup.freeze)
-      format
+      format.instance_variable_set(:@options, options)
+      format.freeze
     end
 
     # The options this format was created with.
@@ -675,25 +679,44 @@ module FastXlsx
       @options
     end
 
-    # A Format for a Hash of options; equal Hashes share one, so a Hash written
-    # with every row costs no more than a Format made once. Other values are
-    # returned as they are.
-    # ponytail: the cache is never emptied; it holds one Format per distinct
-    # Hash, which stays small unless options are generated per cell.
-    # @api private
-    def self.coerce(format)
-      return format unless format.is_a?(Hash)
+    # Formats with the same options are equal (and work as Hash keys).
+    # @return [Boolean]
+    def ==(other)
+      other.is_a?(Format) && to_h == other.to_h
+    end
+    alias eql? ==
 
-      cache = (@cache ||= {})
-      cache.fetch(format) { cache[format.dup.freeze] = new(**format) }
+    # @return [Integer]
+    def hash
+      [Format, to_h].hash
     end
 
     # A new format with these options added to (or replacing) this one's.
+    # @param other [Format, Hash, nil] options to add, like Hash#merge
     # @example
     #   title = header.merge(font_size: 16)
+    #   bold_money = bold.merge(money)
     # @return [Format]
-    def merge(**)
-      Format.new(**to_h, **)
+    def merge(other = nil, **)
+      Format.new(**to_h, **other.to_h, **)
+    end
+
+    # Distinct Hashes kept by {._coerce}; past this, the oldest is dropped.
+    CACHE_SIZE = 1_024
+
+    # A Format for a Hash of options; equal Hashes share one, so a Hash written
+    # with every row costs about as much as a Format made once. Other values
+    # are returned as they are. An invalid Hash raises and isn't kept.
+    # @api private
+    def self._coerce(format)
+      return format unless format.is_a?(Hash)
+
+      cache = (@cache ||= {})
+      cache.fetch(format) do
+        coerced = new(**format)
+        cache.shift if cache.size >= CACHE_SIZE # oldest first
+        cache[format.dup.freeze] = coerced
+      end
     end
   end
 end

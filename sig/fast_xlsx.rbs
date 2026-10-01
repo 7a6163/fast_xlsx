@@ -57,8 +57,10 @@ module FastXlsx
                    ?border: border, ?border_left: border, ?border_right: border,
                    ?border_top: border, ?border_bottom: border, ?border_color: color) -> Format
     def to_h: () -> Hash[Symbol, untyped]
-    def merge: (**untyped options) -> Format
-    def self.coerce: (format? format) -> Format?
+    def merge: (?format? other, **untyped options) -> Format
+    def ==: (untyped other) -> bool
+    def eql?: (untyped other) -> bool
+    def hash: () -> Integer
   end
 
   class Worksheet

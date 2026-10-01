@@ -1860,6 +1860,56 @@ class TestFastXlsx < Minitest::Test
     assert_raises(ArgumentError) { ws["A1:B2"] = 1 }
   end
 
+  # A Format is an immutable value: equal options make equal formats.
+  def test_format_is_a_frozen_value
+    name = +"Arial"
+    a = FastXlsx::Format.new(bold: true, font_name: name)
+    name << "Z"
+
+    assert_predicate a, :frozen?
+    assert_equal "Arial", a.to_h[:font_name] # its own copy
+    assert_equal a, FastXlsx::Format.new(font_name: "Arial", bold: true)
+    assert_operator a, :eql?, FastXlsx::Format.new(bold: true, font_name: "Arial")
+    assert_equal a.hash, FastXlsx::Format.new(bold: true, font_name: "Arial").hash
+    refute_equal a, FastXlsx::Format.new(bold: true)
+  end
+
+  # Options parsed from JSON or YAML have String keys.
+  def test_format_options_may_have_string_keys
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "x", FastXlsx::Format.new("bold" => true))
+    ws.write(0, 1, "y", { "italic" => true })
+
+    xlsx = open_xlsx(wb)
+    assert [xlsx.font(1, 1).bold?, xlsx.font(1, 2).italic?].all?
+    assert_raises(ArgumentError) { ws.write(0, 2, "z", { "bolt" => true }) }
+  end
+
+  def test_format_merge_takes_a_hash_or_a_format
+    bold = FastXlsx::Format.new(bold: true)
+    expected = { bold: true, italic: true }
+    assert_equal expected, bold.merge(italic: true).to_h
+    assert_equal expected, bold.merge({ italic: true }).to_h
+    assert_equal expected, bold.merge(FastXlsx::Format.new(italic: true)).to_h
+  end
+
+  def test_hash_formats_are_cached_but_not_without_limit
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    2_000.times { |i| ws.write(i, 0, i, { font_size: 8 + ((i % 1_500) / 100.0) }) }
+    cache = FastXlsx::Format.instance_variable_get(:@cache)
+    assert_operator cache.size, :<=, 1_024
+
+    assert_raises(ArgumentError) { ws.write(0, 1, 1, { bold: true, colour: "#FF0000" }) }
+    refute cache.key?({ bold: true, colour: "#FF0000" }), "an invalid Hash isn't cached"
+  end
+
+  def test_index_assignment_returns_the_value
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_equal 42, ws.send(:[]=, "B2", 42)
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")

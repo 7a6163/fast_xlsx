@@ -1177,7 +1177,7 @@ impl Worksheet {
             let format_arg = match args.get(3) {
                 Some(f) if RHash::from_value(*f).is_some() => Some(
                     ruby.get_inner(&FORMAT)
-                        .funcall::<_, _, Value>("coerce", (*f,))?,
+                        .funcall::<_, _, Value>("_coerce", (*f,))?,
                 ),
                 f => f.copied(),
             };
