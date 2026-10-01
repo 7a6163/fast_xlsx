@@ -1,7 +1,7 @@
 PATH
   remote: ..
   specs:
-    fast_xlsx (0.2.0)
+    fast_xlsx (0.3.0)
       rb_sys (~> 0.9.130)
 
 GEM
@@ -77,7 +77,7 @@ DEPENDENCIES
 CHECKSUMS
   caxlsx (4.5.0) sha256=e3d98d859f148df05d5462086b5079b523f29c1766b569535f1d68629ce743ff
   fast_excel (0.5.0) sha256=59c418bdcf586a6030798d4e3a9f575742badaceaf7bb90f38eee5feb5bdc478
-  fast_xlsx (0.2.0)
+  fast_xlsx (0.3.0)
   ffi (1.17.4-aarch64-linux-gnu) sha256=b208f06f91ffd8f5e1193da3cae3d2ccfc27fc36fba577baf698d26d91c080df
   ffi (1.17.4-aarch64-linux-musl) sha256=9286b7a615f2676245283aef0a0a3b475ae3aae2bb5448baace630bb77b91f39
   ffi (1.17.4-arm-linux-gnu) sha256=d6dbddf7cb77bf955411af5f187a65b8cd378cb003c15c05697f5feee1cb1564

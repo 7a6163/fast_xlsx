@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-01
+
 ### Changed
 
 - `to_xlsx` and `save` release Ruby's global lock while building and compressing the file, so other threads (e.g. in Puma or Sidekiq) keep running. An interrupt (Ctrl-C, `Timeout`, `Thread#raise`) takes effect once the save finishes.
