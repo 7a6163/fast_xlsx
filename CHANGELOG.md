@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-02
+
 ### Added
 
 - A Hash of options works wherever a format goes (`write(0, 0, "x", { bold: true })`, `append(row, format: { bold: true })`, table columns, conditional formats, rich strings); equal Hashes share one format.
