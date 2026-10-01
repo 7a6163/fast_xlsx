@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- API documentation: every public method has YARD docs (shown on rubydoc.info).
+
 ### Changed
 
 - Errors follow one rule (see the README): a row or column outside the sheet raises `RangeError` (row 1,048,576 or column 16,384 raised `FastXlsx::Error`); `zoom` converts numbers with `to_int` like other arguments (`zoom(150.9)` raised `TypeError`); `column_width` outside 0..255 and `row_height` outside 0..409 raise `ArgumentError` (a negative one hid the column or row).
