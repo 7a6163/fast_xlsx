@@ -1562,6 +1562,25 @@ class TestFastXlsx < Minitest::Test
     refute_match(/overlaps/, error.message)
   end
 
+  # Just past the last row or column is out of the sheet, not an overlap.
+  def test_merge_just_outside_the_sheet_is_a_range_error
+    ws = FastXlsx::Workbook.new.add_worksheet
+    ws.merge_range("A1:B1", "first")
+    [[0, 0, 1_048_576, 1], [0, 0, 0, 16_384]].each do |range|
+      error = assert_raises(RangeError) { ws.merge_range(*range, "x") }
+      refute_match(/overlaps/, error.message)
+    end
+  end
+
+  def test_page_setup_fit_height_alone
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.page_setup(fit_height: 2)
+
+    doc = sheet_doc(wb)
+    assert_equal "1", doc.at("sheetPr pageSetUpPr")["fitToPage"]
+    assert_equal %w[0 2], doc.at("pageSetup").to_h.values_at("fitToWidth", "fitToHeight")
+  end
+
   def test_page_setup_takes_excels_paper_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet.page_setup(paper: 11) # A5
