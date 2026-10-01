@@ -592,6 +592,48 @@ class TestFastXlsx < Minitest::Test
     assert_match(/cell range/, error.message)
   end
 
+  def test_hide_rows_and_columns
+    %i[standard constant].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      ws = wb.add_worksheet
+      assert_same ws, ws.hide_rows(1..2)
+      assert_same ws, ws.hide_columns(3)
+      ws.concat([[0], [1], [2], [3]])
+      assert_raises(FastXlsx::Error) { ws.hide_rows(0) } if memory == :constant # row 0 is on disk
+
+      doc = sheet_doc(wb)
+      hidden = doc.css("sheetData row").select { |r| r["hidden"] == "1" }.map { |r| r["r"] }
+      assert_equal %w[2 3], hidden, "memory: #{memory}"
+      assert_equal "1", doc.at("cols col[min='4']")["hidden"]
+    end
+  end
+
+  # Cells written without a format take the row's; dates get its date variant.
+  def test_row_format_applies_to_cells_written_without_one
+    bold = FastXlsx::Format.new(bold: true)
+    %i[standard constant].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      ws = wb.add_worksheet
+      assert_same ws, ws.row_format(1..2, bold)
+      ws.concat([["head"], ["a", Date.new(2024, 2, 29)], ["b"]])
+
+      xlsx = open_xlsx(wb)
+      assert_equal [false, true, true, true], [[1, 1], [2, 1], [2, 2], [3, 1]].map { |r, c| xlsx.font(r, c).bold? },
+                   "memory: #{memory}"
+      assert_equal "yyyy-mm-dd", xlsx.excelx_format(2, 2)
+    end
+  end
+
+  def test_default_row_height
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_same ws, ws.default_row_height(20)
+
+    # Excel stores heights in whole pixels (0.75 points), so 20 becomes 20.25.
+    assert_in_delta 20, Float(sheet_doc(wb).at("sheetFormatPr")["defaultRowHeight"]), 0.75
+    assert_raises(ArgumentError) { ws.default_row_height(-1) }
+  end
+
   def test_freeze_panes_freezes_rows_above_and_columns_left
     wb = FastXlsx::Workbook.new
     wb.add_worksheet.freeze_panes(1, 2)

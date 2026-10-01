@@ -226,6 +226,11 @@ module FastXlsx
   #   @param color [String, Integer] "#RRGGBB" or 0xRRGGBB
   #   @return [self]
   #
+  # @!method default_row_height(height)
+  #   Height of rows not given one with {#row_height}.
+  #   @param height [Numeric] points, 0..409
+  #   @return [self]
+  #
   # @!method hide_gridlines
   #   Hides the gridlines on screen (see {#page_setup} for printing).
   #   @return [self]
@@ -439,6 +444,30 @@ module FastXlsx
     # @return [self]
     def protect(password: nil, allow: [])
       _protect(password, Array(allow))
+    end
+
+    # @param rows [Integer, Range<Integer>]
+    # @return [self]
+    # @raise [FastXlsx::Error] in :constant / :low mode, for rows already on disk
+    def hide_rows(rows)
+      _hide_rows(*CellRange.bounds(rows))
+    end
+
+    # @param columns [Integer, Range<Integer>]
+    # @return [self]
+    def hide_columns(columns)
+      _hide_columns(*CellRange.bounds(columns))
+    end
+
+    # Default format for cells in these rows that are written without one. It
+    # wins over {#column_format}, as in Excel.
+    # @param rows [Integer, Range<Integer>]
+    # @param format [Format]
+    # @return [self]
+    # @raise [FastXlsx::Error] in :constant / :low mode, for rows already on disk
+    def row_format(rows, format)
+      _row_format(*CellRange.bounds(rows), format)
+      self
     end
 
     # Default format for cells in these columns that are written without one.

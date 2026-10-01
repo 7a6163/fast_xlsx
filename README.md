@@ -130,6 +130,9 @@ Methods that take one cell (`write`, `write_comment`, `insert_image`, `insert_ch
 ```ruby
 ws.freeze_panes(1, 0)                          # keep the first row visible while scrolling
 ws.row_height(0, 30)                       # row 1, height in points
+ws.default_row_height(18)                  # every other row
+ws.row_format(0, header)                   # default for cells in row 1 written without a format (wins over column_format)
+ws.hide_rows(10..20)                       # also hide_columns(3), an index or a Range
 ws.merge_range(0, 0, 0, 3, "Q3 report", title) # merge A1:D1; the value can be any cell type
 ws.page_breaks([50, 100])                  # print a new page before rows 51 and 101
 ws.vertical_page_breaks([8])               # and before column I

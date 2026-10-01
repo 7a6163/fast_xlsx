@@ -62,6 +62,10 @@ module FastXlsx
     def <<: (Array[cell] row) -> self
     def concat: (Array[Array[cell]] rows) -> self
     def column_width: (Integer | Range[Integer] columns, Numeric width) -> self
+    def hide_rows: (Integer | Range[Integer] rows) -> self
+    def hide_columns: (Integer | Range[Integer] columns) -> self
+    def row_format: (Integer | Range[Integer] rows, Format format) -> self
+    def default_row_height: (Numeric height) -> self
     def column_format: (Integer | Range[Integer] columns, Format format) -> self
     def autofit: () -> self
     # A cell range: four 0-based numbers, an Excel reference ("A1:D10"), or

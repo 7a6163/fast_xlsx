@@ -149,6 +149,8 @@ struct Worksheet {
     merges: RefCell<Vec<(u32, u16, u32, u16)>>,
     // Formats given with column_format: (first, last, style).
     formatted_columns: RefCell<Vec<(u16, u16, Arc<Style>)>>,
+    // Formats given with row_format: (first, last, style).
+    formatted_rows: RefCell<Vec<(u32, u32, Arc<Style>)>>,
 }
 
 struct TableColumnFormat {
@@ -217,6 +219,7 @@ impl Workbook {
             table_formats: RefCell::new(Vec::new()),
             merges: RefCell::new(Vec::new()),
             formatted_columns: RefCell::new(Vec::new()),
+            formatted_rows: RefCell::new(Vec::new()),
         })
     }
 
@@ -1034,11 +1037,13 @@ impl Worksheet {
 
     // The format a value is written with: its own, else its table column's.
     // A date cell takes that format's date variant (when it has no
-    // num_format); with neither, its column_format's date variant, or the
-    // default date format when the column has no format. Other cells without
-    // one get None, so rust_xlsxwriter applies any column format itself.
+    // num_format); with neither, its row_format's, else its column_format's
+    // date variant (rust_xlsxwriter's order), else the default date format.
+    // Other cells without one get None, so rust_xlsxwriter applies any row or
+    // column format itself.
     fn format_for<'a>(
         tables: &'a [TableColumnFormat],
+        rows: &'a [(u32, u32, Arc<Style>)],
         columns: &'a [(u16, u16, Arc<Style>)],
         row: u32,
         col: u16,
@@ -1059,13 +1064,21 @@ impl Worksheet {
             return Some(style.pick(date));
         }
         let time = date?;
-        match columns
+        let row_style = rows
             .iter()
             .rev()
-            .find(|(first, last, _)| (*first..=*last).contains(&col))
-        {
+            .find(|(first, last, _)| (*first..=*last).contains(&row))
+            .map(|(_, _, style)| style);
+        let column_style = || {
+            columns
+                .iter()
+                .rev()
+                .find(|(first, last, _)| (*first..=*last).contains(&col))
+                .map(|(_, _, style)| style)
+        };
+        match row_style.or_else(column_style) {
             // None when it has a num_format: rust_xlsxwriter applies it.
-            Some((_, _, style)) => style.for_date(time),
+            Some(style) => style.for_date(time),
             None => DEFAULTS.for_date(time),
         }
     }
@@ -1092,13 +1105,21 @@ impl Worksheet {
             Ok(())
         })?;
         let tables = self.table_formats.borrow();
+        let rows = self.formatted_rows.borrow();
         let columns = self.formatted_columns.borrow();
         self.with_ws(|ws| {
             // Values were checked when converted, so only a bad row number
             // fails here, and it fails on the first cell.
             for (col, value, format) in &values {
-                let format =
-                    Self::format_for(&tables, &columns, row, *col, format.as_deref(), value);
+                let format = Self::format_for(
+                    &tables,
+                    &rows,
+                    &columns,
+                    row,
+                    *col,
+                    format.as_deref(),
+                    value,
+                );
                 value.write(ws, row, *col, format)?;
             }
             Ok(())
@@ -1142,13 +1163,22 @@ impl Worksheet {
         rb_self.check_not_flushed(ruby, row)?;
         let value = CellValue::from_ruby(ruby, v)?;
         let tables = rb_self.table_formats.borrow();
+        let rows = rb_self.formatted_rows.borrow();
         let columns = rb_self.formatted_columns.borrow();
         rb_self.with_ws(|ws| {
             value.write(
                 ws,
                 row,
                 col,
-                Self::format_for(&tables, &columns, row, col, format.map(|f| &*f.0), &value),
+                Self::format_for(
+                    &tables,
+                    &rows,
+                    &columns,
+                    row,
+                    col,
+                    format.map(|f| &*f.0),
+                    &value,
+                ),
             )
         })?;
         rb_self.advance(row);
@@ -1193,6 +1223,66 @@ impl Worksheet {
                 .map(|_| ())
                 .map_err(xerr)
         })
+    }
+
+    // Row options are written with the row, so rows on disk ignore them.
+    fn hide_rows(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        first: u32,
+        last: u32,
+    ) -> Result<Obj<Self>, Error> {
+        rb_self.check_not_flushed(ruby, first)?;
+        rb_self.with_ws(|ws| {
+            for row in first..=last {
+                ws.set_row_hidden(row).map_err(xerr)?;
+            }
+            Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
+    fn hide_columns(rb_self: Obj<Self>, first: u16, last: u16) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| {
+            ws.set_column_range_hidden(first, last)
+                .map(|_| ())
+                .map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
+    fn set_row_format(
+        ruby: &Ruby,
+        rb_self: &Self,
+        first: u32,
+        last: u32,
+        format: &Format,
+    ) -> Result<(), Error> {
+        rb_self.check_not_flushed(ruby, first)?;
+        rb_self.with_ws(|ws| {
+            for row in first..=last {
+                ws.set_row_format(row, &format.0.format).map_err(xerr)?;
+            }
+            Ok(())
+        })?;
+        rb_self
+            .formatted_rows
+            .borrow_mut()
+            .push((first, last, format.0.clone()));
+        Ok(())
+    }
+
+    fn default_row_height(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        height: f64,
+    ) -> Result<Obj<Self>, Error> {
+        check_size(ruby, "row height", height, 409.0)?;
+        rb_self.with_ws(|ws| {
+            ws.set_default_row_height(height);
+            Ok(())
+        })?;
+        Ok(rb_self)
     }
 
     fn set_column_format(&self, first: u16, last: u16, format: &Format) -> Result<(), Error> {
@@ -1348,9 +1438,11 @@ impl Worksheet {
         }
         let value = CellValue::from_ruby(ruby, v)?;
         let tables = rb_self.table_formats.borrow();
+        let rows = rb_self.formatted_rows.borrow();
         let columns = rb_self.formatted_columns.borrow();
         let format = Self::format_for(
             &tables,
+            &rows,
             &columns,
             first_row,
             first_col,
@@ -2015,6 +2107,13 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method(
         "vertical_page_breaks",
         method!(Worksheet::set_vertical_page_breaks, 1),
+    )?;
+    ws.define_method("_hide_rows", method!(Worksheet::hide_rows, 2))?;
+    ws.define_method("_hide_columns", method!(Worksheet::hide_columns, 2))?;
+    ws.define_method("_row_format", method!(Worksheet::set_row_format, 3))?;
+    ws.define_method(
+        "default_row_height",
+        method!(Worksheet::default_row_height, 1),
     )?;
     ws.define_method("activate", method!(Worksheet::activate, 0))?;
     ws.define_method("hide", method!(Worksheet::hide, 0))?;

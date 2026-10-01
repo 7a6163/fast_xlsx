@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- `Worksheet#hide_rows`, `#hide_columns`, `#row_format` (default format for a row's cells, winning over `column_format` as in Excel) and `#default_row_height`.
+
 ### Fixed
 
 - `nil` written with a format (e.g. a border, or a row format in `append`) writes a blank cell with that format; the format was dropped.
