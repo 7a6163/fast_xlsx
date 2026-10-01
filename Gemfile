@@ -10,7 +10,7 @@ gem "rake", "~> 13.0"
 
 gem "rake-compiler"
 
-gem "minitest", "~> 5.16"
+gem "minitest", "~> 6.0"
 
 gem "cgi" # roo requires cgi, which Ruby 4.0 no longer bundles
 gem "roo", "~> 3.0"
