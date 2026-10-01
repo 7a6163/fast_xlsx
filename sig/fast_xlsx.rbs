@@ -62,6 +62,8 @@ module FastXlsx
   end
 
   class Worksheet
+    def []=: (String cell, cell value) -> cell
+           | (Integer row, Integer col, cell value) -> cell
     def write: (Integer row, Integer col, cell value, ?format? format) -> self
              | (String cell, cell value, ?format? format) -> self
     def append: (Array[cell] values, ?format: format? | Array[format?]) -> self

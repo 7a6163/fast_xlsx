@@ -262,6 +262,15 @@ module FastXlsx
     end
     private :_write_ref
 
+    # Writes one cell: ws["B2"] = 42 or ws[1, 1] = 42. Use {#write} to give
+    # it a format.
+    # @overload []=(ref, value)
+    # @overload []=(row, col, value)
+    def []=(*cell, value)
+      row, col = CellRange.cell(cell)
+      write(row, col, value)
+    end
+
     # Appends a row after the last row written.
     # @param values [Array] cell values, as for {#write}
     # @param format [Format, Hash, Array<Format, Hash, nil>, nil] one for every cell, or

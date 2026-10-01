@@ -1850,6 +1850,16 @@ class TestFastXlsx < Minitest::Test
     assert_equal [["x", true, false], ["y", false, false]], rich_runs(wb)
   end
 
+  def test_index_assignment_writes_a_cell
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws["B1"] = 42
+    ws[1, 0] = "x"
+
+    assert_equal [[nil, 42], ["x", nil]], rows(wb) # rows are as wide as the sheet
+    assert_raises(ArgumentError) { ws["A1:B2"] = 1 }
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")
