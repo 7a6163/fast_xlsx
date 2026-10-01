@@ -186,10 +186,13 @@ module FastXlsx
   #   Writes one cell.
   #   @overload write(row, col, value, format = nil)
   #   @overload write(ref, value, format = nil)
+  #   @overload write(row, col, value, format: nil)
+  #   @overload write(ref, value, format: nil)
   #   @param value [Numeric, String, Time, Date, DateTime, true, false, nil,
   #     Formula, URL, RichString, #to_s] dates get yyyy-mm-dd (hh:mm:ss) unless
   #     the format has a num_format
-  #   @param format [Format, Hash, nil] a Hash of options works too
+  #   @param format [Format, Hash, nil] positional or format: (a little slower:
+  #     Ruby builds a Hash for the keyword); a Hash of options works too
   #   @return [self]
   #
   # @!method <<(values)
@@ -256,11 +259,26 @@ module FastXlsx
     # is native: the (row, col) form runs once per cell, so it skips a Ruby
     # wrapper. Other forms come here.
     def _write_ref(*args)
+      args = format_keyword(args)
       row, col, (value, format) = CellRange.cell(args, 1..2)
       _write(row, col, value, Format._coerce(format))
       self
     end
     private :_write_ref
+
+    # A trailing { format: f } (the keyword form) as a positional format, so
+    # write and merge_range take the format either way, like append.
+    def format_keyword(args)
+      last = args.last
+      return args unless last.is_a?(Hash) && last.keys == [:format]
+
+      args = args[0...-1]
+      cell_args = args.first.is_a?(String) ? 2 : 3
+      raise ArgumentError, "pass the format either positionally or as format:, not both" if args.size > cell_args
+
+      args + [last[:format]]
+    end
+    private :format_keyword
 
     # Writes one cell: ws["B2"] = 42 or ws[1, 1] = 42. Use {#write} to give
     # it a format.
@@ -311,10 +329,11 @@ module FastXlsx
 
     # Merges the range and writes value (any cell type) into its first cell.
     # @overload merge_range(*range, value, format = nil)
+    # @overload merge_range(*range, value, format: nil)
     # @return [self]
     # @raise [FastXlsx::Error] when it overlaps an earlier merge
     def merge_range(*args)
-      range, (value, format) = CellRange.split(args, 1..2)
+      range, (value, format) = CellRange.split(format_keyword(args), 1..2)
       _merge_range(*range, value, Format._coerce(format))
     end
 

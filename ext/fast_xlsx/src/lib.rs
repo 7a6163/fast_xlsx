@@ -1173,8 +1173,14 @@ impl Worksheet {
     fn write_any(ruby: &Ruby, rb_self: Obj<Self>, args: &[Value]) -> Result<Obj<Self>, Error> {
         let index = |i: usize| args.get(i).and_then(|v| Integer::from_value(*v));
         if let (3 | 4, Some(row), Some(col)) = (args.len(), index(0), index(1)) {
+            // write(r, c, v, format: f) passes its keyword as a trailing Hash.
+            let keyword = args
+                .get(3)
+                .and_then(|v| RHash::from_value(*v))
+                .filter(|h| h.len() == 1)
+                .and_then(|h| h.get(ruby.to_symbol("format")));
             // A Hash of options becomes a (cached) Format, as in Ruby.
-            let format_arg = match args.get(3) {
+            let format_arg = match keyword.as_ref().or(args.get(3)) {
                 Some(f) if RHash::from_value(*f).is_some() => Some(
                     ruby.get_inner(&FORMAT)
                         .funcall::<_, _, Value>("_coerce", (*f,))?,

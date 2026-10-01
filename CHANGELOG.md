@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- `write` and `merge_range` also take the format as `format:`, like `append` (positional still works).
+
 ## [0.7.0] - 2026-10-02
 
 ### Added

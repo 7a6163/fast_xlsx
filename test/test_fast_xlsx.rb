@@ -1932,6 +1932,22 @@ class TestFastXlsx < Minitest::Test
     assert_equal 42, ws.send(:[]=, "B2", 42)
   end
 
+  # format: as a keyword, as append takes it; positional still works.
+  def test_write_and_merge_range_take_format_as_a_keyword
+    bold = FastXlsx::Format.new(bold: true)
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "a", format: bold)
+    ws.write("B1", "b", format: { bold: true })
+    ws.write(0, 2, "c", bold)
+    ws.merge_range("A2:B2", "m", format: bold)
+    ws.merge_range("A3:B3", "n", bold)
+
+    xlsx = open_xlsx(wb)
+    assert_equal [true] * 5, [[1, 1], [1, 2], [1, 3], [2, 1], [3, 1]].map { |r, c| xlsx.font(r, c).bold? }
+    assert_raises(ArgumentError) { ws.write(0, 3, "d", bold, format: bold) } # not both
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")

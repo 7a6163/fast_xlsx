@@ -67,7 +67,9 @@ module FastXlsx
     def []=: (String cell, cell value) -> cell
            | (Integer row, Integer col, cell value) -> cell
     def write: (Integer row, Integer col, cell value, ?format? format) -> self
+             | (Integer row, Integer col, cell value, format: format?) -> self
              | (String cell, cell value, ?format? format) -> self
+             | (String cell, cell value, format: format?) -> self
     def append: (Array[cell] values, ?format: format? | Array[format?]) -> self
     def <<: (Array[cell] row) -> self
     def concat: (Array[Array[cell]] rows) -> self
@@ -120,6 +122,7 @@ module FastXlsx
     def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?format? format) -> self
                    | (String range, cell value, ?format? format) -> self
                    | (indexes rows, indexes cols, cell value, ?format? format) -> self
+                   | (*cell_range | cell args, format: format?) -> self
     def conditional_format: (*cell_range range,
                              type: :cell | :text | :formula | :data_bar | :color_scale,
                              ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
