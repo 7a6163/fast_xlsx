@@ -82,7 +82,7 @@ ws.write(1, 2, Date.today, date)                         # format one cell
 
 Per-side borders override `border`. Unknown options and invalid values raise `ArgumentError`.
 
-Dates and times written without a format get `yyyy-mm-dd` or `yyyy-mm-dd hh:mm:ss`; a table column's format or `column_format` wins over that. A format you pass replaces it, so give date cells one with a `num_format` (e.g. `Format.new(bold: true, num_format: "yyyy-mm-dd")`), or Excel shows the serial number.
+Dates and times are shown as `yyyy-mm-dd` or `yyyy-mm-dd hh:mm:ss`. A format without a `num_format` (yours, a table column's or `column_format`'s) keeps its look and gets that date format added, so `append(row, format: bold)` gives bold dates; a format with a `num_format` is used as is.
 
 ### Columns and filters
 

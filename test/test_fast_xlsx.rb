@@ -91,6 +91,26 @@ class TestFastXlsx < Minitest::Test
                  [[1, 1], [1, 2], [2, 1], [5, 3], [1, 5]].map { |r, c| xlsx.excelx_format(r, c) }
   end
 
+  # A format without a num_format keeps its look and gets the date format
+  # added, wherever it comes from; one with a num_format is used as is.
+  def test_date_cells_merge_the_date_format_into_formats_without_one
+    bold = FastXlsx::Format.new(bold: true)
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.append(["Total", Date.new(2024, 2, 29), Time.utc(2024, 2, 29, 13, 30)], format: bold)
+    ws.write(1, 0, Date.new(2024, 2, 29), FastXlsx::Format.new(bold: true, num_format: "dd/mm/yyyy"))
+    ws.column_format(4, bold)
+    ws.write(0, 4, Date.new(2024, 2, 29))
+    ws.add_table(3, 6, 5, 6, columns: [{ header: "When", format: bold }])
+    ws.write(4, 6, Time.utc(2024, 2, 29, 13, 30))
+
+    xlsx = open_xlsx(wb)
+    cells = [[1, 1], [1, 2], [1, 3], [2, 1], [1, 5], [5, 7]]
+    assert_equal ["General", "yyyy-mm-dd", "yyyy-mm-dd hh:mm:ss", "dd/mm/yyyy", "yyyy-mm-dd", "yyyy-mm-dd hh:mm:ss"],
+                 cells.map { |r, c| xlsx.excelx_format(r, c) }
+    assert(cells.all? { |r, c| xlsx.font(r, c).bold? }, "every cell stays bold")
+  end
+
   def test_time_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Time.utc(2000, 1, 1, 12)]

@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- Date and time cells written with a format that has no `num_format` (e.g. `append(row, format: bold)`) get the default date format added, instead of showing as serial numbers. This applies to a cell's own format, a table column's and `column_format`'s; a format with a `num_format` is used as is.
+
 ## [0.4.0] - 2026-10-01
 
 ### Changed

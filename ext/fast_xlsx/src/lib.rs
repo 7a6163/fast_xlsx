@@ -113,14 +113,14 @@ struct Worksheet {
     table_formats: RefCell<Vec<TableColumnFormat>>,
     // Merged ranges as (first_row, first_col, last_row, last_col).
     merges: RefCell<Vec<(u32, u16, u32, u16)>>,
-    // Column ranges given a format with column_format.
-    formatted_columns: RefCell<Vec<(u16, u16)>>,
+    // Formats given with column_format: (first, last, style).
+    formatted_columns: RefCell<Vec<(u16, u16, Arc<Style>)>>,
 }
 
 struct TableColumnFormat {
     rows: std::ops::RangeInclusive<u32>,
     col: u16,
-    format: Arc<rust_xlsxwriter::Format>,
+    format: Arc<Style>,
 }
 
 impl Workbook {
@@ -307,7 +307,7 @@ enum CellValue {
     Formula(String),
     Url(String, Option<String>),
     // RichString segments; None means the default font.
-    Rich(Vec<(Option<Arc<rust_xlsxwriter::Format>>, String)>),
+    Rich(Vec<(Option<Arc<Style>>, String)>),
 }
 
 impl CellValue {
@@ -348,16 +348,10 @@ impl CellValue {
         Ok(value)
     }
 
-    // The format for a value written without one: without a number format
-    // Excel shows a date as its serial number.
-    fn default_format(&self) -> Option<&'static rust_xlsxwriter::Format> {
-        static DATE: LazyLock<rust_xlsxwriter::Format> =
-            LazyLock::new(|| rust_xlsxwriter::Format::new().set_num_format("yyyy-mm-dd"));
-        static DATE_TIME: LazyLock<rust_xlsxwriter::Format> =
-            LazyLock::new(|| rust_xlsxwriter::Format::new().set_num_format("yyyy-mm-dd hh:mm:ss"));
+    // Some(has a time of day) for date cells.
+    fn date_kind(&self) -> Option<bool> {
         match self {
-            CellValue::Date(_, false) => Some(&DATE),
-            CellValue::Date(_, true) => Some(&DATE_TIME),
+            CellValue::Date(_, time) => Some(*time),
             _ => None,
         }
     }
@@ -412,7 +406,7 @@ impl CellValue {
                 let default = rust_xlsxwriter::Format::default();
                 let rich: Vec<(&rust_xlsxwriter::Format, &str)> = parts
                     .iter()
-                    .map(|(f, text)| (f.as_deref().unwrap_or(&default), text.as_str()))
+                    .map(|(f, text)| (f.as_deref().map_or(&default, |s| &s.format), text.as_str()))
                     .collect();
                 match format {
                     Some(f) => ws.write_rich_string_with_format(row, col, &rich, f),
@@ -714,10 +708,7 @@ const TABLE_TOTALS: &[(&str, TableFunction)] = &[
 
 // A table column: a header String, or { header:, total:, total_label:, format: }.
 // Also returns a copy of the column's format, if any, for later writes.
-fn table_column(
-    ruby: &Ruby,
-    v: Value,
-) -> Result<(TableColumn, Option<Arc<rust_xlsxwriter::Format>>), Error> {
+fn table_column(ruby: &Ruby, v: Value) -> Result<(TableColumn, Option<Arc<Style>>), Error> {
     let Some(spec) = RHash::from_value(v) else {
         return Ok((TableColumn::new().set_header(String::try_convert(v)?), None));
     };
@@ -737,7 +728,7 @@ fn table_column(
     }
     let format = opt::<&Format>(ruby, spec, "format")?.map(|f| f.0.clone());
     if let Some(f) = &format {
-        column = column.set_format(&**f);
+        column = column.set_format(&f.format);
     }
     Ok((column, format))
 }
@@ -782,11 +773,52 @@ const BORDERS: &[(&str, FormatBorder)] = &[
 ];
 
 #[magnus::wrap(class = "FastXlsx::Format", free_immediately)]
-struct Format(Arc<rust_xlsxwriter::Format>);
+struct Format(Arc<Style>);
+
+// A Format as written: the format itself, and for one without a num_format,
+// copies with the default date formats added, used for date cells (Excel
+// shows a date with no number format as its serial number).
+struct Style {
+    format: rust_xlsxwriter::Format,
+    date: Option<rust_xlsxwriter::Format>,
+    date_time: Option<rust_xlsxwriter::Format>,
+}
+
+const DATE_FORMAT: &str = "yyyy-mm-dd";
+const DATE_TIME_FORMAT: &str = "yyyy-mm-dd hh:mm:ss";
+
+impl Style {
+    fn new(format: rust_xlsxwriter::Format, has_num_format: bool) -> Self {
+        let with =
+            |num_format: &str| (!has_num_format).then(|| format.clone().set_num_format(num_format));
+        Style {
+            date: with(DATE_FORMAT),
+            date_time: with(DATE_TIME_FORMAT),
+            format,
+        }
+    }
+
+    // The date variant for a date cell (`time`: it has a time of day), if
+    // this format has no num_format of its own.
+    fn for_date(&self, time: bool) -> Option<&rust_xlsxwriter::Format> {
+        if time {
+            self.date_time.as_ref()
+        } else {
+            self.date.as_ref()
+        }
+    }
+
+    // What a value is written with: `date` is Some(has time) for date cells.
+    fn pick(&self, date: Option<bool>) -> &rust_xlsxwriter::Format {
+        date.and_then(|time| self.for_date(time))
+            .unwrap_or(&self.format)
+    }
+}
 
 impl Format {
     fn new(ruby: &Ruby, options: RHash) -> Result<Self, Error> {
         let mut f = rust_xlsxwriter::Format::new();
+        let mut has_num_format = false;
         options.foreach(|key: Symbol, value: Value| {
             let taken = std::mem::take(&mut f);
             f = match &*key.name()? {
@@ -834,7 +866,10 @@ impl Format {
                 "locked" => taken.set_unlocked(),
                 "hidden" if value.to_bool() => taken.set_hidden(),
                 "border_color" => taken.set_border_color(color(ruby, value)?),
-                "num_format" => taken.set_num_format(String::try_convert(value)?),
+                "num_format" => {
+                    has_num_format = true;
+                    taken.set_num_format(String::try_convert(value)?)
+                }
                 "font_size" => taken.set_font_size(f64::try_convert(value)?),
                 "font_name" => taken.set_font_name(String::try_convert(value)?),
                 "font_color" => taken.set_font_color(color(ruby, value)?),
@@ -876,7 +911,7 @@ impl Format {
             };
             Ok(ForEach::Continue)
         })?;
-        Ok(Format(Arc::new(f)))
+        Ok(Format(Arc::new(Style::new(f, has_num_format))))
     }
 }
 
@@ -899,7 +934,7 @@ fn each_entry(
 
 // A row's format: one Format (or nil) for every cell, or an Array with one per cell.
 enum RowFormat {
-    Same(Option<Arc<rust_xlsxwriter::Format>>),
+    Same(Option<Arc<Style>>),
     PerCell(RArray),
 }
 
@@ -913,7 +948,7 @@ impl RowFormat {
         }
     }
 
-    fn at(&self, col: usize) -> Result<Option<Arc<rust_xlsxwriter::Format>>, Error> {
+    fn at(&self, col: usize) -> Result<Option<Arc<Style>>, Error> {
         match self {
             RowFormat::Same(f) => Ok(f.clone()),
             RowFormat::PerCell(formats) => Ok(Option::<&Format>::try_convert(
@@ -955,42 +990,42 @@ impl Worksheet {
         f(wb.worksheet_from_index(self.index).map_err(xerr)?)
     }
 
-    // The format to write a cell with: its own, else its table column's.
-    fn cell_format<'a>(
+    // The format a value is written with: its own, else its table column's.
+    // A date cell takes that format's date variant (when it has no
+    // num_format); with neither, its column_format's date variant, or the
+    // default date format when the column has no format. Other cells without
+    // one get None, so rust_xlsxwriter applies any column format itself.
+    fn format_for<'a>(
         tables: &'a [TableColumnFormat],
+        columns: &'a [(u16, u16, Arc<Style>)],
         row: u32,
         col: u16,
-        own: Option<&'a rust_xlsxwriter::Format>,
+        own: Option<&'a Style>,
+        value: &CellValue,
     ) -> Option<&'a rust_xlsxwriter::Format> {
-        own.or_else(|| {
+        static DEFAULTS: LazyLock<Style> =
+            LazyLock::new(|| Style::new(rust_xlsxwriter::Format::new(), false));
+        let date = value.date_kind();
+        let style = own.or_else(|| {
             tables
                 .iter()
                 .rev()
                 .find(|t| t.col == col && t.rows.contains(&row))
                 .map(|t| &*t.format)
-        })
-    }
-
-    // The format a value is written with: its own, else its table column's,
-    // else its type's default (dates) unless column_format covers the column,
-    // whose format rust_xlsxwriter applies to cells written without one.
-    fn format_for<'a>(
-        &self,
-        tables: &'a [TableColumnFormat],
-        row: u32,
-        col: u16,
-        own: Option<&'a rust_xlsxwriter::Format>,
-        value: &CellValue,
-    ) -> Option<&'a rust_xlsxwriter::Format> {
-        Self::cell_format(tables, row, col, own).or_else(|| {
-            value.default_format().filter(|_| {
-                !self
-                    .formatted_columns
-                    .borrow()
-                    .iter()
-                    .any(|&(first, last)| (first..=last).contains(&col))
-            })
-        })
+        });
+        if let Some(style) = style {
+            return Some(style.pick(date));
+        }
+        let time = date?;
+        match columns
+            .iter()
+            .rev()
+            .find(|(first, last, _)| (*first..=*last).contains(&col))
+        {
+            // None when it has a num_format: rust_xlsxwriter applies it.
+            Some((_, _, style)) => style.for_date(time),
+            None => DEFAULTS.for_date(time),
+        }
     }
 
     fn write_row(
@@ -1015,11 +1050,13 @@ impl Worksheet {
             Ok(())
         })?;
         let tables = self.table_formats.borrow();
+        let columns = self.formatted_columns.borrow();
         self.with_ws(|ws| {
             // Values were checked when converted, so only a bad row number
             // fails here, and it fails on the first cell.
             for (col, value, format) in &values {
-                let format = self.format_for(&tables, row, *col, format.as_deref(), value);
+                let format =
+                    Self::format_for(&tables, &columns, row, *col, format.as_deref(), value);
                 value.write(ws, row, *col, format)?;
             }
             Ok(())
@@ -1063,12 +1100,13 @@ impl Worksheet {
         rb_self.check_not_flushed(ruby, row)?;
         let value = CellValue::from_ruby(ruby, v)?;
         let tables = rb_self.table_formats.borrow();
+        let columns = rb_self.formatted_columns.borrow();
         rb_self.with_ws(|ws| {
             value.write(
                 ws,
                 row,
                 col,
-                rb_self.format_for(&tables, row, col, format.map(|f| &*f.0), &value),
+                Self::format_for(&tables, &columns, row, col, format.map(|f| &*f.0), &value),
             )
         })?;
         rb_self.advance(row);
@@ -1110,11 +1148,13 @@ impl Worksheet {
 
     fn set_column_format(&self, first: u16, last: u16, format: &Format) -> Result<(), Error> {
         self.with_ws(|ws| {
-            ws.set_column_range_format(first, last, &format.0)
+            ws.set_column_range_format(first, last, &format.0.format)
                 .map(|_| ())
                 .map_err(xerr)
         })?;
-        self.formatted_columns.borrow_mut().push((first, last));
+        self.formatted_columns
+            .borrow_mut()
+            .push((first, last, format.0.clone()));
         Ok(())
     }
 
@@ -1238,8 +1278,15 @@ impl Worksheet {
         }
         let value = CellValue::from_ruby(ruby, v)?;
         let tables = rb_self.table_formats.borrow();
-        let format =
-            rb_self.format_for(&tables, first_row, first_col, format.map(|f| &*f.0), &value);
+        let columns = rb_self.formatted_columns.borrow();
+        let format = Self::format_for(
+            &tables,
+            &columns,
+            first_row,
+            first_col,
+            format.map(|f| &*f.0),
+            &value,
+        );
         let default = rust_xlsxwriter::Format::new();
         rb_self.with_ws(|ws| {
             // The value was checked when converted, so once the range is
@@ -1306,7 +1353,7 @@ impl Worksheet {
                 let mut cf =
                     ConditionalFormatCell::new().set_rule(cell_rule(ruby, criteria, value)?);
                 if let Some(f) = format {
-                    cf = cf.set_format(&*f.0);
+                    cf = cf.set_format(&f.0.format);
                 }
                 rule(range, cf)
             }
@@ -1330,7 +1377,7 @@ impl Worksheet {
                 };
                 let mut cf = ConditionalFormatText::new().set_rule(text_rule);
                 if let Some(f) = format {
-                    cf = cf.set_format(&*f.0);
+                    cf = cf.set_format(&f.0.format);
                 }
                 rule(range, cf)
             }
@@ -1338,7 +1385,7 @@ impl Worksheet {
                 let mut cf =
                     ConditionalFormatFormula::new().set_rule(String::try_convert(value)?.as_str());
                 if let Some(f) = format {
-                    cf = cf.set_format(&*f.0);
+                    cf = cf.set_format(&f.0.format);
                 }
                 rule(range, cf)
             }
