@@ -1344,6 +1344,90 @@ class TestFastXlsx < Minitest::Test
     assert_raises(FastXlsx::Error) { wb.to_xlsx }
   end
 
+  def workbook_xml(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    Nokogiri::XML(zip.read("xl/workbook.xml")).remove_namespaces!
+  end
+
+  def sheet_doc(workbook, index = 1)
+    Nokogiri::XML(sheet_xml(workbook, index)).remove_namespaces!
+  end
+
+  def test_sheet_view_settings
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+
+    assert_same ws, ws.zoom(150).tab_color("#C00000").hide_gridlines
+    view = sheet_doc(wb).at("sheetView")
+    assert_equal %w[150 0], [view["zoomScale"], view["showGridLines"]]
+    assert_equal "FFC00000", sheet_doc(wb).at("sheetPr tabColor")["rgb"]
+    assert_raises(ArgumentError) { ws.zoom(500) }
+    assert_raises(ArgumentError) { ws.tab_color("red") }
+  end
+
+  def test_activate_opens_on_that_sheet_only
+    wb = FastXlsx::Workbook.new
+    first = wb.add_worksheet
+    second = wb.add_worksheet
+    third = wb.add_worksheet
+    second.activate
+    assert_same third, third.activate
+
+    assert_equal "2", workbook_xml(wb).at("workbookView")["activeTab"]
+    selected = (1..3).map { |i| sheet_doc(wb, i).at("sheetView")["tabSelected"] }
+    assert_equal [nil, nil, "1"], selected # only one tab selected, so sheets aren't grouped
+    assert_equal first, wb.worksheets.first
+  end
+
+  def test_hide_a_sheet
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet("Report")
+    lookup = wb.add_worksheet("Lookup")
+
+    assert_same lookup, lookup.hide
+    states = workbook_xml(wb).css("sheets sheet").to_h { |s| [s["name"], s["state"]] }
+    assert_equal({ "Report" => nil, "Lookup" => "hidden" }, states)
+  end
+
+  # Excel opens on the active sheet (the first one unless another is
+  # activated), so it can't be hidden.
+  def test_hiding_the_active_sheet_raises
+    wb = FastXlsx::Workbook.new
+    first = wb.add_worksheet
+    second = wb.add_worksheet
+    error = assert_raises(FastXlsx::Error) { first.hide }
+    assert_match(/activate another/, error.message)
+
+    second.activate
+    first.hide
+    assert_raises(FastXlsx::Error) { second.hide }
+  end
+
+  def test_page_setup
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet("Report")
+
+    assert_same ws, ws.page_setup(landscape: true, paper: :a4, fit_width: 1, repeat_rows: 0,
+                                  repeat_columns: 0..1, print_area: "A1:D100", gridlines: true)
+    doc = sheet_doc(wb)
+    setup = doc.at("pageSetup")
+    # fitToWidth is left out when it is Excel's default, 1.
+    assert_equal ["landscape", "9", nil, "0"],
+                 setup.to_h.values_at("orientation", "paperSize", "fitToWidth", "fitToHeight")
+    assert_equal "1", doc.at("sheetPr pageSetUpPr")["fitToPage"]
+    assert_equal "1", doc.at("printOptions")["gridLines"]
+    names = defined_names(wb).to_h { |name, _, formula| [name, formula] }
+    assert_equal "Report!$A:$B,Report!$1:$1", names["_xlnm.Print_Titles"]
+    assert_equal "Report!$A$1:$D$100", names["_xlnm.Print_Area"]
+  end
+
+  def test_page_setup_rejects_unknown_options_and_paper
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(ArgumentError) { ws.page_setup(landscpe: true) }
+    error = assert_raises(ArgumentError) { ws.page_setup(paper: :napkin) }
+    assert_match(/:a4/, error.message)
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")

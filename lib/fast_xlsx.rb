@@ -197,6 +197,18 @@ module FastXlsx
       margin ? margins(footer: margin) : self
     end
 
+    # Printing: landscape:, paper: (:letter, :legal, :tabloid, :a3, :a4, :a5 or
+    # Excel's paper number), fit_width:/fit_height: (pages; 0 or left out =
+    # as many as needed), repeat_rows:/repeat_columns: (an index or Range,
+    # printed on every page), print_area: (any cell range), gridlines:.
+    def page_setup(repeat_rows: nil, repeat_columns: nil, print_area: nil, **options)
+      options[:repeat_rows] = CellRange.bounds(repeat_rows) if repeat_rows
+      options[:repeat_columns] = CellRange.bounds(repeat_columns) if repeat_columns
+      options[:print_area] = CellRange.split(print_area.is_a?(Array) ? print_area : [print_area]).first if print_area
+      _page_setup(options)
+      self
+    end
+
     # Print margins in inches; margins not given keep their current value.
     def margins(left: nil, right: nil, top: nil, bottom: nil, header: nil, footer: nil)
       _margins(*[left, right, top, bottom, header, footer].map { |m| m || -1.0 })

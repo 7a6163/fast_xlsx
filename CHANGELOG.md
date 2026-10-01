@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- `Worksheet#zoom`, `#tab_color`, `#hide_gridlines`, `#activate`, `#hide`, and `#page_setup` (orientation, paper size, fit to pages, rows/columns repeated on every page, print area, printed gridlines).
+
 ## [0.2.0] - 2026-10-01
 
 ### Added

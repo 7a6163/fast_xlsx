@@ -77,6 +77,14 @@ module FastXlsx
     def vertical_page_breaks: (Array[Integer] cols) -> self
     def page_header: (String text, ?margin: Numeric?) -> self
     def page_footer: (String text, ?margin: Numeric?) -> self
+    def activate: () -> self
+    def hide: () -> self
+    def zoom: (Integer percent) -> self
+    def tab_color: (String | Integer color) -> self
+    def hide_gridlines: () -> self
+    def page_setup: (?landscape: bool, ?paper: :letter | :legal | :tabloid | :a3 | :a4 | :a5 | Integer,
+                     ?fit_width: Integer, ?fit_height: Integer, ?repeat_rows: indexes, ?repeat_columns: indexes,
+                     ?print_area: String | Array[cell_range], ?gridlines: bool) -> self
     def margins: (?left: Numeric?, ?right: Numeric?, ?top: Numeric?, ?bottom: Numeric?,
                   ?header: Numeric?, ?footer: Numeric?) -> self
     type protect_action = :format_cells | :format_columns | :format_rows | :insert_columns | :insert_rows

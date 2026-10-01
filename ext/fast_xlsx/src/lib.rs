@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use magnus::{
@@ -42,6 +43,9 @@ type Shared = Arc<Mutex<rust_xlsxwriter::Workbook>>;
 #[magnus::wrap(class = "FastXlsx::Workbook", free_immediately)]
 struct Workbook {
     inner: Shared,
+    // Index of the sheet Excel opens on (0 unless one is activated), shared
+    // with the worksheets: it can't be hidden.
+    active: Arc<AtomicUsize>,
     constant_memory: bool,
     low_memory: bool,
 }
@@ -50,6 +54,7 @@ struct Workbook {
 struct Worksheet {
     wb: Shared,
     index: usize,
+    active: Arc<AtomicUsize>,
     // Where << / append write next.
     next_row: Cell<u32>,
     // Highest row with cells written. In :constant / :low mode rows above it
@@ -73,6 +78,7 @@ impl Workbook {
     fn new(constant_memory: bool, low_memory: bool) -> Self {
         Workbook {
             inner: Arc::new(Mutex::new(rust_xlsxwriter::Workbook::new())),
+            active: Arc::new(AtomicUsize::new(0)),
             constant_memory,
             low_memory,
         }
@@ -121,6 +127,7 @@ impl Workbook {
         Ok(Worksheet {
             wb: self.inner.clone(),
             index: wb.worksheets().len() - 1,
+            active: self.active.clone(),
             next_row: Cell::new(0),
             last_written_row: Cell::new(0),
             flushes_rows: self.constant_memory || self.low_memory,
@@ -684,6 +691,16 @@ const PROTECTION_ALLOW: &[(&str, ProtectionFlag)] = &[
     ("use_pivot_tables", |o| &mut o.use_pivot_tables),
     ("edit_scenarios", |o| &mut o.edit_scenarios),
     ("edit_objects", |o| &mut o.edit_objects),
+];
+
+// Excel's paper size codes; page_setup also takes the number itself.
+const PAPER_SIZES: &[(&str, u8)] = &[
+    ("letter", 1),
+    ("tabloid", 3),
+    ("legal", 5),
+    ("a3", 8),
+    ("a4", 9),
+    ("a5", 11),
 ];
 
 const BORDERS: &[(&str, FormatBorder)] = &[
@@ -1490,6 +1507,124 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn activate(rb_self: Obj<Self>) -> Result<Obj<Self>, Error> {
+        let mut wb = rb_self.wb.lock().unwrap();
+        // rust_xlsxwriter leaves sheets activated earlier selected, which
+        // groups them in Excel (edits then go to all of them).
+        for (i, ws) in wb.worksheets_mut().iter_mut().enumerate() {
+            ws.set_active(i == rb_self.index);
+            ws.set_selected(i == rb_self.index);
+        }
+        rb_self.active.store(rb_self.index, Ordering::Relaxed);
+        Ok(rb_self)
+    }
+
+    fn hide(ruby: &Ruby, rb_self: Obj<Self>) -> Result<Obj<Self>, Error> {
+        // rust_xlsxwriter would quietly unhide it when saving.
+        if rb_self.active.load(Ordering::Relaxed) == rb_self.index {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                "can't hide the sheet Excel opens on (the first one unless another is activated): activate another sheet first",
+            ));
+        }
+        rb_self.with_ws(|ws| {
+            ws.set_hidden(true);
+            Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
+    fn zoom(ruby: &Ruby, rb_self: Obj<Self>, percent: u16) -> Result<Obj<Self>, Error> {
+        // rust_xlsxwriter only prints a warning for these.
+        if !(10..=400).contains(&percent) {
+            return Err(Error::new(
+                ruby.exception_arg_error(),
+                format!("invalid zoom {percent}: use 10..400"),
+            ));
+        }
+        rb_self.with_ws(|ws| {
+            ws.set_zoom(percent);
+            Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
+    fn tab_color(ruby: &Ruby, rb_self: Obj<Self>, value: Value) -> Result<Obj<Self>, Error> {
+        let rgb = color(ruby, value)?;
+        rb_self.with_ws(|ws| {
+            ws.set_tab_color(rgb);
+            Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
+    fn hide_gridlines(rb_self: Obj<Self>) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| {
+            ws.set_screen_gridlines(false);
+            Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
+    // Ranges arrive as [first, last] / [first_row, first_col, last_row,
+    // last_col], already parsed by lib/fast_xlsx.rb.
+    fn page_setup(ruby: &Ruby, rb_self: &Self, options: RHash) -> Result<(), Error> {
+        check_keys(
+            ruby,
+            options,
+            &[
+                "landscape",
+                "paper",
+                "fit_width",
+                "fit_height",
+                "repeat_rows",
+                "repeat_columns",
+                "print_area",
+                "gridlines",
+            ],
+            "page_setup",
+        )?;
+        let landscape = opt::<Value>(ruby, options, "landscape")?.map(|v| v.to_bool());
+        let paper = match opt::<Value>(ruby, options, "paper")? {
+            None => None,
+            Some(v) if Integer::from_value(v).is_some() => Some(u8::try_convert(v)?),
+            Some(v) => Some(choice(ruby, "paper", v, PAPER_SIZES)?),
+        };
+        let fit_width = opt::<u16>(ruby, options, "fit_width")?;
+        let fit_height = opt::<u16>(ruby, options, "fit_height")?;
+        let repeat_rows = opt::<(u32, u32)>(ruby, options, "repeat_rows")?;
+        let repeat_columns = opt::<(u16, u16)>(ruby, options, "repeat_columns")?;
+        let print_area = opt::<(u32, u16, u32, u16)>(ruby, options, "print_area")?;
+        let gridlines = opt::<Value>(ruby, options, "gridlines")?.map(|v| v.to_bool());
+        rb_self.with_ws(|ws| {
+            match landscape {
+                Some(true) => ws.set_landscape(),
+                Some(false) => ws.set_portrait(),
+                None => ws,
+            };
+            if let Some(paper) = paper {
+                ws.set_paper_size(paper);
+            }
+            // 0 means as many pages as the content needs.
+            if fit_width.is_some() || fit_height.is_some() {
+                ws.set_print_fit_to_pages(fit_width.unwrap_or(0), fit_height.unwrap_or(0));
+            }
+            if let Some((first, last)) = repeat_rows {
+                ws.set_repeat_rows(first, last).map_err(xerr)?;
+            }
+            if let Some((first, last)) = repeat_columns {
+                ws.set_repeat_columns(first, last).map_err(xerr)?;
+            }
+            if let Some((fr, fc, lr, lc)) = print_area {
+                ws.set_print_area(fr, fc, lr, lc).map_err(xerr)?;
+            }
+            if let Some(gridlines) = gridlines {
+                ws.set_print_gridlines(gridlines);
+            }
+            Ok(())
+        })
+    }
+
     fn group_rows(
         ruby: &Ruby,
         rb_self: Obj<Self>,
@@ -1603,6 +1738,12 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "vertical_page_breaks",
         method!(Worksheet::set_vertical_page_breaks, 1),
     )?;
+    ws.define_method("activate", method!(Worksheet::activate, 0))?;
+    ws.define_method("hide", method!(Worksheet::hide, 0))?;
+    ws.define_method("zoom", method!(Worksheet::zoom, 1))?;
+    ws.define_method("tab_color", method!(Worksheet::tab_color, 1))?;
+    ws.define_method("hide_gridlines", method!(Worksheet::hide_gridlines, 0))?;
+    ws.define_method("_page_setup", method!(Worksheet::page_setup, 1))?;
     ws.define_method("_group_rows", method!(Worksheet::group_rows, 3))?;
     ws.define_method("_group_columns", method!(Worksheet::group_columns, 3))?;
     ws.define_method("_protect", method!(Worksheet::protect, 2))?;
