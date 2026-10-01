@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-01
+
 ### Added
 
 - API documentation: every public method has YARD docs (shown on rubydoc.info).
