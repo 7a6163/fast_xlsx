@@ -227,9 +227,12 @@ module FastXlsx
   #   @return [self]
   #
   # @!method default_row_height(height)
-  #   Height of rows not given one with {#row_height}.
-  #   @param height [Numeric] points, 0..409
+  #   Height of rows not given one with {#row_height}. Call it before
+  #   {#row_height}, {#row_format}, {#hide_rows} and {#group_rows}: rows given
+  #   those keep the earlier default.
+  #   @param height [Numeric] points, above 0 and up to 409
   #   @return [self]
+  #   @raise [FastXlsx::Error] when called after those
   #
   # @!method hide_gridlines
   #   Hides the gridlines on screen (see {#page_setup} for printing).
@@ -446,8 +449,8 @@ module FastXlsx
       _protect(password, Array(allow))
     end
 
-    # A range users can still edit on a protected sheet, optionally with its
-    # own password.
+    # A range users can still edit on a protected sheet ({#protect}),
+    # optionally with its own password. Give each range its own name.
     # @overload unprotect_range(*range, name: nil, password: nil)
     #   @param name [String, nil] shown in Excel's "Allow Edit Ranges"
     # @return [self]
@@ -470,7 +473,8 @@ module FastXlsx
     end
 
     # Turns off one of Excel's warnings (green triangles) in the range, e.g.
-    # for codes stored as text. Excel allows one per range.
+    # for codes stored as text. One kind per range (a rust_xlsxwriter limit);
+    # overlapping ranges are accepted, but Excel then uses only one of them.
     # @overload ignore_error(*range, error)
     #   @param error [Symbol] :number_stored_as_text, :formula_error,
     #     :formula_differs, :formula_refers_to_empty_cells,
@@ -483,6 +487,7 @@ module FastXlsx
       _ignore_error(*range, error)
     end
 
+    # Each row in the range is kept (about 1 KB) until saving.
     # @param rows [Integer, Range<Integer>]
     # @return [self]
     # @raise [FastXlsx::Error] in :constant / :low mode, for rows already on disk
@@ -496,8 +501,10 @@ module FastXlsx
       _hide_columns(*CellRange.bounds(columns))
     end
 
-    # Default format for cells in these rows that are written without one. It
-    # wins over {#column_format}, as in Excel.
+    # Default format for cells in these rows that are written without one.
+    # Use it or {#column_format} for a cell, not both: where both apply, Excel
+    # may combine them or show the row's. Each row is kept (about 1 KB) until
+    # saving, so style a whole sheet with {#column_format}.
     # @param rows [Integer, Range<Integer>]
     # @param format [Format]
     # @return [self]

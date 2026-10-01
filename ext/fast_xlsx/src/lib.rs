@@ -63,6 +63,15 @@ fn check_positive(ruby: &Ruby, what: &str, size: f64) -> Result<f64, Error> {
     ))
 }
 
+// A range of rows is checked before any row changes, so it is all or nothing.
+fn check_last_row(last: u32) -> Result<(), Error> {
+    if last < MAX_ROWS {
+        Ok(())
+    } else {
+        Err(xerr(XlsxError::RowColumnLimitError))
+    }
+}
+
 fn check_size(ruby: &Ruby, what: &str, size: f64, max: f64) -> Result<(), Error> {
     if (0.0..=max).contains(&size) {
         return Ok(());
@@ -151,6 +160,10 @@ struct Worksheet {
     formatted_columns: RefCell<Vec<(u16, u16, Arc<Style>)>>,
     // Formats given with row_format: (first, last, style).
     formatted_rows: RefCell<Vec<(u32, u32, Arc<Style>)>>,
+    // Whether a row got options (height, format, hidden, outline level):
+    // rust_xlsxwriter copies the default row height into a row then, so
+    // default_row_height must come first.
+    row_options_set: Cell<bool>,
 }
 
 struct TableColumnFormat {
@@ -220,6 +233,7 @@ impl Workbook {
             merges: RefCell::new(Vec::new()),
             formatted_columns: RefCell::new(Vec::new()),
             formatted_rows: RefCell::new(Vec::new()),
+            row_options_set: Cell::new(false),
         })
     }
 
@@ -1256,12 +1270,14 @@ impl Worksheet {
         last: u32,
     ) -> Result<Obj<Self>, Error> {
         rb_self.check_not_flushed(ruby, first)?;
+        check_last_row(last)?;
         rb_self.with_ws(|ws| {
             for row in first..=last {
                 ws.set_row_hidden(row).map_err(xerr)?;
             }
             Ok(())
         })?;
+        rb_self.row_options_set.set(true);
         Ok(rb_self)
     }
 
@@ -1342,12 +1358,14 @@ impl Worksheet {
         format: &Format,
     ) -> Result<(), Error> {
         rb_self.check_not_flushed(ruby, first)?;
+        check_last_row(last)?;
         rb_self.with_ws(|ws| {
             for row in first..=last {
                 ws.set_row_format(row, &format.0.format).map_err(xerr)?;
             }
             Ok(())
         })?;
+        rb_self.row_options_set.set(true);
         rb_self
             .formatted_rows
             .borrow_mut()
@@ -1360,7 +1378,20 @@ impl Worksheet {
         rb_self: Obj<Self>,
         height: f64,
     ) -> Result<Obj<Self>, Error> {
+        // rust_xlsxwriter ignores 0.
+        if height == 0.0 {
+            return Err(Error::new(
+                ruby.exception_arg_error(),
+                "invalid default row height 0: use a number above 0",
+            ));
+        }
         check_size(ruby, "row height", height, 409.0)?;
+        if rb_self.row_options_set.get() {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                "call default_row_height before row_height, row_format, hide_rows or group_rows: rows given those keep the earlier default",
+            ));
+        }
         rb_self.with_ws(|ws| {
             ws.set_default_row_height(height);
             Ok(())
@@ -1416,6 +1447,7 @@ impl Worksheet {
     ) -> Result<Obj<Self>, Error> {
         check_size(ruby, "row height", height, 409.0)?;
         rb_self.with_ws(|ws| ws.set_row_height(row, height).map(|_| ()).map_err(xerr))?;
+        rb_self.row_options_set.set(true);
         Ok(rb_self)
     }
 
@@ -2101,6 +2133,7 @@ impl Worksheet {
             .map(|_| ())
             .map_err(xerr)
         })?;
+        rb_self.row_options_set.set(true);
         Ok(rb_self)
     }
 

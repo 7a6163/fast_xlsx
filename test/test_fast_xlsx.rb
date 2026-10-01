@@ -624,6 +624,27 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  # A range running past the last row changes nothing.
+  def test_row_ranges_past_the_sheet_change_nothing
+    bold = FastXlsx::Format.new(bold: true)
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_raises(RangeError) { ws.hide_rows(1_048_574..1_048_577) }
+    assert_raises(RangeError) { ws.row_format(1_048_574..1_048_577, bold) }
+
+    assert_empty sheet_doc(wb).css("sheetData row")
+  end
+
+  # rust_xlsxwriter copies the default height into a row when it first gets
+  # options, so a later default would skip those rows.
+  def test_default_row_height_must_come_before_other_row_settings
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(ArgumentError) { ws.default_row_height(0) } # Excel ignores it
+    ws.row_height(3, 30)
+    error = assert_raises(FastXlsx::Error) { ws.default_row_height(20) }
+    assert_match(/before/, error.message)
+  end
+
   def test_default_row_height
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
