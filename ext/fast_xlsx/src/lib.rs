@@ -418,7 +418,11 @@ impl CellValue {
         format: Option<&rust_xlsxwriter::Format>,
     ) -> Result<(), Error> {
         match self {
-            CellValue::Empty => Ok(()),
+            // nil writes nothing, unless it has a format (e.g. a border).
+            CellValue::Empty => match format {
+                Some(f) => ws.write_blank(row, col, f).map(|_| ()).map_err(xerr),
+                None => Ok(()),
+            },
             CellValue::Text(s) => emit(ws, row, col, s.as_str(), format),
             CellValue::Number(n) | CellValue::Date(n, _) => emit(ws, row, col, *n, format),
             CellValue::Bool(b) => emit(ws, row, col, *b, format),

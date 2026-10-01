@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- `nil` written with a format (e.g. a border, or a row format in `append`) writes a blank cell with that format; the format was dropped.
+
 ## [0.5.0] - 2026-10-01
 
 ### Added

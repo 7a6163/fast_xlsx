@@ -111,6 +111,23 @@ class TestFastXlsx < Minitest::Test
     assert(cells.all? { |r, c| xlsx.font(r, c).bold? }, "every cell stays bold")
   end
 
+  # A format on an empty cell (e.g. a border around a table) is kept; nil
+  # without a format still writes nothing.
+  def test_nil_with_a_format_writes_a_formatted_blank
+    border = FastXlsx::Format.new(border: :thin)
+    %i[standard constant].each do |memory|
+      wb = FastXlsx::Workbook.new(memory: memory)
+      ws = wb.add_worksheet
+      ws.write(0, 0, nil, border)
+      ws.append(["a", nil, "c"], format: border)
+      ws.append([nil, "x", nil], format: [border, nil, nil])
+
+      cells = sheet_doc(wb).css("sheetData c").map { |c| [c["r"], !c["s"].nil?] }
+      assert_equal [["A1", true], ["A2", true], ["B2", true], ["C2", true], ["A3", true], ["B3", false]], cells,
+                   "memory: #{memory}"
+    end
+  end
+
   def test_time_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Time.utc(2000, 1, 1, 12)]

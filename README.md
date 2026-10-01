@@ -258,7 +258,7 @@ Values are mapped by type:
 | `FastXlsx::URL.new("https://…")`, `URL.new(url, text: "Title")` | hyperlink (optionally showing other text) |
 | `FastXlsx::RichString.new(["Total: ", bold], "1,234")` | text with a format per segment |
 | `true` / `false` | boolean |
-| `nil` | empty cell |
+| `nil` | empty cell (a blank cell with the format, when one is given) |
 | anything else | `to_s` as string |
 
 `<<` and `concat` append after the last row written to that worksheet. In `:constant` / `:low` memory mode rows are written to disk as you go, so fill each worksheet top to bottom.
