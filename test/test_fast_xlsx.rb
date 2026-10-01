@@ -1465,6 +1465,25 @@ class TestFastXlsx < Minitest::Test
     assert_equal "Report!$A$1:$D$100", names["_xlnm.Print_Area"]
   end
 
+  def test_view_and_page_setup_reject_bad_numbers
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_raises(TypeError) { ws.zoom(150.9) }
+    error = assert_raises(ArgumentError) { ws.page_setup(paper: 300) }
+    assert_match(/paper/, error.message)
+
+    ws.page_setup(fit_width: 0, fit_height: 0) # nothing to fit to
+    assert_nil sheet_doc(wb).at("sheetPr pageSetUpPr")
+  end
+
+  # A merge rust_xlsxwriter rejects for its own reasons reports those, not an overlap.
+  def test_invalid_merge_reports_its_own_error_before_overlap
+    ws = FastXlsx::Workbook.new.add_worksheet
+    ws.merge_range("A1:B1", "first")
+    error = assert_raises(FastXlsx::Error) { ws.merge_range(0, 0, 2_000_000, 1, "x") }
+    refute_match(/overlaps/, error.message)
+  end
+
   def test_page_setup_rejects_unknown_options_and_paper
     ws = FastXlsx::Workbook.new.add_worksheet
     assert_raises(ArgumentError) { ws.page_setup(landscpe: true) }

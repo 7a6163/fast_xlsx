@@ -239,8 +239,9 @@ fn emit<T: IntoExcelData>(
 
 // Excel's limit on the text in a cell.
 const MAX_CHARS: usize = 32_767;
-// Excel's column count.
+// Excel's column and row counts.
 const MAX_COLS: usize = 16_384;
+const MAX_ROWS: u32 = 1_048_576;
 
 // A cell value converted from Ruby. Converting may run Ruby code (to_s, jd,
 // url, ...), so it happens before the workbook lock is taken: Ruby code that
@@ -1120,8 +1121,14 @@ impl Worksheet {
         rb_self.check_not_flushed(ruby, first_row)?;
         // rust_xlsxwriter blanks the range before it notices an overlap, which
         // wipes the earlier merge's value, so check first.
+        // A range rust_xlsxwriter rejects anyway (reversed, too big) is left
+        // to it, so its error names the real problem.
         // ponytail: linear scan; sheets have few merges.
         let range = (first_row, first_col, last_row, last_col);
+        let valid = first_row <= last_row
+            && first_col <= last_col
+            && last_row < MAX_ROWS
+            && usize::from(last_col) < MAX_COLS;
         let overlap = rb_self
             .merges
             .borrow()
@@ -1129,7 +1136,8 @@ impl Worksheet {
             .copied()
             .find(|&(fr, fc, lr, lc)| {
                 first_row <= lr && fr <= last_row && first_col <= lc && fc <= last_col
-            });
+            })
+            .filter(|_| valid);
         if let Some((fr, fc, lr, lc)) = overlap {
             return Err(Error::new(
                 ruby.get_inner(&ERROR),
@@ -1583,7 +1591,16 @@ impl Worksheet {
         Ok(rb_self)
     }
 
-    fn zoom(ruby: &Ruby, rb_self: Obj<Self>, percent: u16) -> Result<Obj<Self>, Error> {
+    fn zoom(ruby: &Ruby, rb_self: Obj<Self>, percent: Value) -> Result<Obj<Self>, Error> {
+        // Integers only: converting would quietly truncate 150.9.
+        let percent = Integer::from_value(percent)
+            .ok_or_else(|| {
+                Error::new(
+                    ruby.exception_type_error(),
+                    format!("zoom must be an Integer, got {}", percent.inspect()),
+                )
+            })?
+            .to_i64()?;
         // rust_xlsxwriter only prints a warning for these.
         if !(10..=400).contains(&percent) {
             return Err(Error::new(
@@ -1592,7 +1609,7 @@ impl Worksheet {
             ));
         }
         rb_self.with_ws(|ws| {
-            ws.set_zoom(percent);
+            ws.set_zoom(percent as u16);
             Ok(())
         })?;
         Ok(rb_self)
@@ -1636,7 +1653,16 @@ impl Worksheet {
         let landscape = opt::<Value>(ruby, options, "landscape")?.map(|v| v.to_bool());
         let paper = match opt::<Value>(ruby, options, "paper")? {
             None => None,
-            Some(v) if Integer::from_value(v).is_some() => Some(u8::try_convert(v)?),
+            Some(v) if Integer::from_value(v).is_some() => Some(
+                Integer::from_value(v)
+                    .and_then(|n| n.to_u8().ok())
+                    .ok_or_else(|| {
+                        Error::new(
+                            ruby.exception_arg_error(),
+                            format!("invalid paper {}: use a symbol or Excel's paper number (0 for the printer's default)", v.inspect()),
+                        )
+                    })?,
+            ),
             Some(v) => Some(choice(ruby, "paper", v, PAPER_SIZES)?),
         };
         let fit_width = opt::<u16>(ruby, options, "fit_width")?;
@@ -1655,7 +1681,7 @@ impl Worksheet {
                 ws.set_paper_size(paper);
             }
             // 0 means as many pages as the content needs.
-            if fit_width.is_some() || fit_height.is_some() {
+            if fit_width.unwrap_or(0) > 0 || fit_height.unwrap_or(0) > 0 {
                 ws.set_print_fit_to_pages(fit_width.unwrap_or(0), fit_height.unwrap_or(0));
             }
             if let Some((first, last)) = repeat_rows {

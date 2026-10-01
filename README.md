@@ -98,10 +98,10 @@ ws.autofilter("A1:D101")          # filter buttons on A1:D101
 ws.zoom(150)                # 10..400 percent
 ws.tab_color("#C00000")
 ws.hide_gridlines
-ws.activate                 # Excel opens on this sheet
+ws.activate                 # Excel opens on this sheet (un-hides it if hidden)
 other.hide                  # the sheet Excel opens on can't be hidden: activate another one first
 
-ws.page_setup(landscape: true, paper: :a4,  # or :letter, :legal, :tabloid, :a3, :a5, or Excel's paper number
+ws.page_setup(landscape: true, paper: :a4,  # or :letter, :legal, :tabloid, :a3, :a5, Excel's paper number, 0 = printer default
               fit_width: 1,                 # 1 page wide, as many pages tall as needed
               repeat_rows: 0,               # print the header row on every page (an index or a Range)
               print_area: "A1:D100",        # any cell range style
