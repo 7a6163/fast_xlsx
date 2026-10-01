@@ -40,6 +40,39 @@ fn xerr(e: XlsxError) -> Error {
 
 type Shared = Arc<Mutex<rust_xlsxwriter::Workbook>>;
 
+// Runs `f` without Ruby's global lock, so other Ruby threads run meanwhile.
+// `f` must not touch any Ruby object, and must release the workbook mutex
+// before returning: a Ruby thread waiting on that mutex holds the lock this
+// thread then needs back.
+fn without_gvl<R>(f: impl FnOnce() -> R) -> R {
+    unsafe extern "C" fn call<F: FnOnce() -> R, R>(
+        data: *mut std::ffi::c_void,
+    ) -> *mut std::ffi::c_void {
+        let (f, result) = &mut *(data as *mut (Option<F>, Option<std::thread::Result<R>>));
+        // A panic must not unwind into Ruby's C code; it is resumed below.
+        *result = Some(std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+            f.take().unwrap(),
+        )));
+        std::ptr::null_mut()
+    }
+    fn run<F: FnOnce() -> R, R>(f: F) -> R {
+        let mut data: (Option<F>, Option<std::thread::Result<R>>) = (Some(f), None);
+        unsafe {
+            rb_sys::rb_thread_call_without_gvl(
+                Some(call::<F, R>),
+                &mut data as *mut _ as *mut std::ffi::c_void,
+                None,
+                std::ptr::null_mut(),
+            );
+        }
+        match data.1.unwrap() {
+            Ok(result) => result,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    }
+    run(f)
+}
+
 #[magnus::wrap(class = "FastXlsx::Workbook", free_immediately)]
 struct Workbook {
     inner: Shared,
@@ -138,18 +171,17 @@ impl Workbook {
         })
     }
 
+    // Saving (XML and compression) can take a while, so it runs without
+    // Ruby's global lock. The mutex guard is dropped inside the closure.
     fn to_xlsx(ruby: &Ruby, rb_self: &Self) -> Result<RString, Error> {
-        let buf = rb_self
-            .inner
-            .lock()
-            .unwrap()
-            .save_to_buffer()
-            .map_err(xerr)?;
+        let inner = &rb_self.inner;
+        let buf = without_gvl(|| inner.lock().unwrap().save_to_buffer()).map_err(xerr)?;
         Ok(ruby.str_from_slice(&buf))
     }
 
     fn save(&self, path: String) -> Result<(), Error> {
-        self.inner.lock().unwrap().save(path).map_err(xerr)
+        let inner = &self.inner;
+        without_gvl(|| inner.lock().unwrap().save(path).map(|_| ())).map_err(xerr)
     }
 
     // "Name" for the whole workbook, "Sheet1!Name" for one sheet. Duplicate

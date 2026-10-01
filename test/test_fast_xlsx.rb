@@ -1076,6 +1076,29 @@ class TestFastXlsx < Minitest::Test
       ws.merge_range(2, 0, 2, 1, label)
       print "ok"
     RUBY
+    assert_script_prints_ok(script, "writing a value whose to_s reads the worksheet")
+  end
+
+  # While one thread saves (without Ruby's global lock), another writing to the
+  # same workbook waits on its mutex holding that lock. Saving must release the
+  # mutex before taking the lock back, or both wait forever.
+  def test_writing_from_another_thread_while_saving_does_not_deadlock
+    script = <<~'RUBY'
+      require "fast_xlsx"
+      wb = FastXlsx::Workbook.new
+      ws = wb.add_worksheet
+      ws.concat(Array.new(30_000) { |n| [n, "row #{n}"] })
+      writer = Thread.new { 2_000.times { |n| ws.write(40_000 + n, 0, n) } }
+      5.times { wb.to_xlsx }
+      writer.join
+      print "ok"
+    RUBY
+    assert_script_prints_ok(script, "writing from another thread while saving")
+  end
+
+  # Runs Ruby code that could deadlock in a child process, so a deadlock fails
+  # the test instead of hanging the suite.
+  def assert_script_prints_ok(script, what)
     reader, writer = IO.pipe
     pid = Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__), "-e", script, out: writer)
     writer.close
@@ -1084,7 +1107,7 @@ class TestFastXlsx < Minitest::Test
     unless done
       Process.kill(:KILL, pid)
       Process.wait(pid)
-      flunk "deadlocked: writing a value whose to_s reads the worksheet did not finish in 15s"
+      flunk "deadlocked: #{what} did not finish in 15s"
     end
     assert_equal "ok", reader.read
   end
@@ -1496,6 +1519,25 @@ class TestFastXlsx < Minitest::Test
     assert_raises(ArgumentError) { ws.page_setup(landscpe: true) }
     error = assert_raises(ArgumentError) { ws.page_setup(paper: :napkin) }
     assert_match(/:a4/, error.message)
+  end
+
+  # Saving compresses without holding Ruby's global lock, so other threads
+  # (e.g. in Puma or Sidekiq) keep running. A thread counting in Ruby can't
+  # advance while the lock is held.
+  def test_saving_lets_other_threads_run
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.concat(Array.new(30_000) { |n| [n, "row #{n}", n * 1.5] })
+    count = 0
+    counter = Thread.new { loop { count += 1 } }
+    sleep 0.05 # let it start
+
+    [-> { wb.to_xlsx }, -> { Tempfile.create(%w[gvl .xlsx]) { |f| wb.save(f.path) } }].each do |save|
+      before = count
+      save.call
+      assert_operator count - before, :>, 1000
+    end
+  ensure
+    counter&.kill
   end
 
   def test_properties
