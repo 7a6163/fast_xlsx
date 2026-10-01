@@ -726,8 +726,7 @@ module FastXlsx
       Format.new(**to_h, **other.to_h, **)
     end
 
-    # Distinct Hashes kept by {._coerce}; past this, the least recently used
-    # is dropped.
+    # Distinct Hashes kept by {._coerce}; past this, the oldest is dropped.
     CACHE_SIZE = 1_024
 
     # A Format for a Hash of options; equal Hashes share one, so a Hash written
@@ -737,21 +736,15 @@ module FastXlsx
     def self._coerce(format)
       return format unless format.is_a?(Hash)
 
-      # Entries are [frozen key, format], in order of use: a hit moves to the
-      # end, so a Hash in constant use isn't evicted.
+      # ponytail: evicts the oldest entry, not the least used one, since
+      # moving each hit costs every write; a Hash still in use is rebuilt at
+      # worst once per CACHE_SIZE new Hashes.
       cache = (@cache ||= {})
-      if (entry = cache.delete(format))
-        cache[entry[0]] = entry
-        return entry[1]
+      cache.fetch(format) do
+        coerced = new(**format)
+        cache.shift if cache.size >= CACHE_SIZE
+        cache[format.dup.freeze] = coerced
       end
-      _cache(cache, format.dup.freeze, new(**format))
-    end
-
-    # @api private
-    def self._cache(cache, key, format)
-      cache.shift if cache.size >= CACHE_SIZE # least recently used
-      cache[key] = [key, format]
-      format
     end
   end
 end

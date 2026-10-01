@@ -1896,20 +1896,17 @@ class TestFastXlsx < Minitest::Test
     assert_equal expected, bold.merge(FastXlsx::Format.new(italic: true)).to_h
   end
 
-  # Equal Hashes share one Format; the least recently used goes past CACHE_SIZE.
+  # Equal Hashes share one Format; past CACHE_SIZE the oldest is dropped.
   def test_hash_formats_are_cached_but_not_without_limit
     ws = FastXlsx::Workbook.new.add_worksheet
-    kept = { bold: true, font_name: "Kept" }
-    first = FastXlsx::Format._coerce(kept)
-    (FastXlsx::Format::CACHE_SIZE * 2).times do |i|
-      ws.write(i, 0, i, { font_size: 8 + (i / 100.0) })
-      FastXlsx::Format._coerce(kept) # in use all along, so never the least recent
-    end
+    first = FastXlsx::Format._coerce({ bold: true, font_name: "First" })
+    assert_same first, FastXlsx::Format._coerce({ bold: true, font_name: "First" })
+    (FastXlsx::Format::CACHE_SIZE * 2).times { |i| ws.write(i, 0, i, { font_size: 8 + (i / 100.0) }) }
     cache = FastXlsx::Format.instance_variable_get(:@cache)
 
     assert_operator cache.size, :<=, FastXlsx::Format::CACHE_SIZE
-    assert_same first, FastXlsx::Format._coerce(kept)
-    refute cache.key?({ font_size: 8.0 }), "the least recently used went first"
+    refute cache.key?({ font_size: 8.0 }), "the oldest went first"
+    assert_equal first, FastXlsx::Format._coerce({ bold: true, font_name: "First" }) # rebuilt, equal
     assert_raises(ArgumentError) { ws.write(0, 1, 1, { bold: true, colour: "#FF0000" }) }
     refute cache.key?({ bold: true, colour: "#FF0000" }), "an invalid Hash isn't cached"
   end
