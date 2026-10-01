@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-02
+
 ### Added
 
 - `Worksheet#selection`, `#top_left_cell` (what is selected and scrolled to when the file opens), `#ignore_error` (turns off Excel's green-triangle warnings in a range) and `#unprotect_range` (a range users can edit on a protected sheet).
