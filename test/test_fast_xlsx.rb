@@ -630,6 +630,7 @@ class TestFastXlsx < Minitest::Test
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet
     assert_raises(RangeError) { ws.hide_rows(1_048_574..1_048_577) }
+    assert_raises(RangeError) { ws.hide_rows(1_048_574..1_048_576) } # just one row past
     assert_raises(RangeError) { ws.row_format(1_048_574..1_048_577, bold) }
 
     assert_empty sheet_doc(wb).css("sheetData row")
