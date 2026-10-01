@@ -228,8 +228,8 @@ module FastXlsx
   #
   # @!method default_row_height(height)
   #   Height of rows not given one with {#row_height}. Call it before
-  #   {#row_height}, {#row_format}, {#hide_rows} and {#group_rows}: rows given
-  #   those keep the earlier default.
+  #   {#row_format}, {#hide_rows} and {#group_rows}: rows given those keep
+  #   the earlier default.
   #   @param height [Numeric] points, above 0 and up to 409
   #   @return [self]
   #   @raise [FastXlsx::Error] when called after those

@@ -160,7 +160,7 @@ struct Worksheet {
     formatted_columns: RefCell<Vec<(u16, u16, Arc<Style>)>>,
     // Formats given with row_format: (first, last, style).
     formatted_rows: RefCell<Vec<(u32, u32, Arc<Style>)>>,
-    // Whether a row got options (height, format, hidden, outline level):
+    // Whether a row got options (format, hidden, outline level):
     // rust_xlsxwriter copies the default row height into a row then, so
     // default_row_height must come first.
     row_options_set: Cell<bool>,
@@ -1389,7 +1389,7 @@ impl Worksheet {
         if rb_self.row_options_set.get() {
             return Err(Error::new(
                 ruby.get_inner(&ERROR),
-                "call default_row_height before row_height, row_format, hide_rows or group_rows: rows given those keep the earlier default",
+                "call default_row_height before row_format, hide_rows, group_rows or row_height(row, 0): rows given those keep the earlier default",
             ));
         }
         rb_self.with_ws(|ws| {
@@ -1447,7 +1447,10 @@ impl Worksheet {
     ) -> Result<Obj<Self>, Error> {
         check_size(ruby, "row height", height, 409.0)?;
         rb_self.with_ws(|ws| ws.set_row_height(row, height).map(|_| ()).map_err(xerr))?;
-        rb_self.row_options_set.set(true);
+        // A height is kept as given; only 0 (hiding the row) copies the default.
+        if height == 0.0 {
+            rb_self.row_options_set.set(true);
+        }
         Ok(rb_self)
     }
 

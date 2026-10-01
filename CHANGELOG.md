@@ -3,7 +3,7 @@
 ### Added
 
 - `Worksheet#selection`, `#top_left_cell` (what is selected and scrolled to when the file opens), `#ignore_error` (turns off Excel's green-triangle warnings in a range) and `#unprotect_range` (a range users can edit on a protected sheet).
-- `Worksheet#hide_rows`, `#hide_columns`, `#row_format` (default format for a row's cells) and `#default_row_height` (call it before the other row settings, which copy the default into their rows; it raises otherwise).
+- `Worksheet#hide_rows`, `#hide_columns`, `#row_format` (default format for a row's cells) and `#default_row_height` (call it before `row_format`, `hide_rows` and `group_rows`, which copy the default into their rows; it raises otherwise).
 
 ### Fixed
 

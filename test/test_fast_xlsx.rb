@@ -638,11 +638,30 @@ class TestFastXlsx < Minitest::Test
   # rust_xlsxwriter copies the default height into a row when it first gets
   # options, so a later default would skip those rows.
   def test_default_row_height_must_come_before_other_row_settings
-    ws = FastXlsx::Workbook.new.add_worksheet
-    assert_raises(ArgumentError) { ws.default_row_height(0) } # Excel ignores it
-    ws.row_height(3, 30)
-    error = assert_raises(FastXlsx::Error) { ws.default_row_height(20) }
-    assert_match(/before/, error.message)
+    bold = FastXlsx::Format.new(bold: true)
+    assert_raises(ArgumentError) { FastXlsx::Workbook.new.add_worksheet.default_row_height(0) } # Excel ignores it
+    [->(ws) { ws.hide_rows(2) }, ->(ws) { ws.row_format(2, bold) }, ->(ws) { ws.group_rows(2..3) },
+     ->(ws) { ws.row_height(2, 0) }].each_with_index do |setting, i|
+      ws = FastXlsx::Workbook.new.add_worksheet
+      setting.call(ws)
+      error = assert_raises(FastXlsx::Error, "case #{i}") { ws.default_row_height(20) }
+      assert_match(/before/, error.message)
+    end
+  end
+
+  # An explicit height is kept as is, so it can come first.
+  def test_row_height_then_default_row_height
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.row_height(0, 30)
+    ws.default_row_height(18)
+    ws.concat([["a"], ["b"]])
+
+    doc = sheet_doc(wb)
+    # Row 1 keeps its 30; row 2 gets the default (heights are rounded to pixels).
+    heights = doc.css("sheetData row").map { |r| Float(r["ht"]).round }
+    assert_equal [30, 18], heights
+    assert_in_delta 18, Float(doc.at("sheetFormatPr")["defaultRowHeight"]), 0.75
   end
 
   def test_default_row_height
