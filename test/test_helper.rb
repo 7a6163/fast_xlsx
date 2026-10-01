@@ -3,7 +3,10 @@
 # Set by ext/fast_xlsx/tests/ruby_suite.rs for mutation testing. A mutant can
 # loop forever inside the extension, where Ruby can't interrupt it, and this
 # process outlives cargo-mutants' timeout; a CPU limit lets the kernel stop it.
-Process.setrlimit(:CPU, Integer(ENV["FAST_XLSX_TEST_CPU_SECONDS"])) if ENV["FAST_XLSX_TEST_CPU_SECONDS"]
+if (cpu_seconds = ENV["FAST_XLSX_TEST_CPU_SECONDS"])
+  hard = Process.getrlimit(:CPU)[1] # keep it: lowering only the soft limit can't fail
+  Process.setrlimit(:CPU, [Integer(cpu_seconds), hard].min, hard)
+end
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "fast_xlsx"

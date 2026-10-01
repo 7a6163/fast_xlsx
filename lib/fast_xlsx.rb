@@ -234,7 +234,8 @@ module FastXlsx
   # an Excel reference ("A1:D10", "B2"), or rows and columns as Integers or
   # Ranges.
   module CellRange
-    REF = /\A\$?([A-Z]{1,3})\$?([1-9]\d*)\z/i
+    REF = /\A\$?([A-Za-z]{1,3})\$?([1-9]\d*)\z/ # ASCII only: /i also matches the Kelvin sign
+    FORMS = 'a range is (first_row, first_col, last_row, last_col), "A1:D10" or (rows, cols)'
 
     module_function
 
@@ -243,8 +244,9 @@ module FastXlsx
     def split(args, following = 0..0)
       range, rest = parse(args)
       unless following.cover?(rest.size)
-        raise ArgumentError,
-              "wrong number of arguments after the cell range (given #{rest.size}, expected #{following})"
+        expected = following.minmax.uniq.join("..")
+        raise ArgumentError, "wrong number of arguments after the cell range (given #{rest.size}, " \
+                             "expected #{expected}); #{FORMS}"
       end
 
       [range, rest]
@@ -252,13 +254,12 @@ module FastXlsx
 
     def parse(args)
       case args
-      in [Integer, Integer, Integer, Integer, *rest] then [args.first(4), rest]
+      in [Numeric, Numeric, Numeric, Numeric, *rest] then [args.first(4), rest]
       in [String => ref, *rest] then [excel(ref), rest]
       in [Integer | Range => rows, Integer | Range => cols, *rest]
         [rows_and_cols(rows, cols), rest]
       else
-        raise ArgumentError, "expected a cell range: (first_row, first_col, last_row, last_col), " \
-                             "\"A1:D10\" or (rows, cols); got #{args.inspect}"
+        raise ArgumentError, "expected a cell range, got #{args.inspect}; #{FORMS}"
       end
     end
 
@@ -291,6 +292,9 @@ module FastXlsx
     # [first, last] of an index or a Range.
     def bounds(indexes)
       return [indexes, indexes] if indexes.is_a?(Integer)
+      unless indexes.is_a?(Range) && indexes.begin.is_a?(Integer) && indexes.end.is_a?(Integer)
+        raise ArgumentError, "expected an Integer or a Range of Integers, got #{indexes.inspect}"
+      end
 
       first, last = indexes.minmax
       raise ArgumentError, "empty range #{indexes.inspect}" unless first

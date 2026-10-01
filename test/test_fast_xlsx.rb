@@ -460,6 +460,25 @@ class TestFastXlsx < Minitest::Test
     assert_equal "E5:F7", table(wb)[:ref]
   end
 
+  # As in 0.1.x, the four-number form truncates Floats.
+  def test_ranges_accept_float_coordinates
+    assert_equal "A1:B2", autofilter_ref(0.0, 0, 1.9, 1)
+  end
+
+  def test_range_errors_name_the_problem
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.autofilter("K1") } # Kelvin sign, not K
+    assert_match(/invalid cell range/, error.message)
+
+    error = assert_raises(ArgumentError) { ws.autofilter(0, 0, 1) } # one number missing
+    assert_match(/expected 0\b.*first_row, first_col, last_row, last_col/m, error.message)
+
+    [[0.., 0..1], [0..2, "A".."C"]].each do |range|
+      error = assert_raises(ArgumentError, range.inspect) { ws.autofilter(*range) }
+      assert_match(/Range of Integers/, error.message)
+    end
+  end
+
   def test_invalid_range_references_raise
     ws = FastXlsx::Workbook.new.add_worksheet
     ["A0", "1A", "A1:", "", "A1:B2:C3", "A:A"].each do |ref|
