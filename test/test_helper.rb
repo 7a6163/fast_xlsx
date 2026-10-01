@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+# Set by ext/fast_xlsx/tests/ruby_suite.rs for mutation testing. A mutant can
+# loop forever inside the extension, where Ruby can't interrupt it, and this
+# process outlives cargo-mutants' timeout; a CPU limit lets the kernel stop it.
+Process.setrlimit(:CPU, Integer(ENV["FAST_XLSX_TEST_CPU_SECONDS"])) if ENV["FAST_XLSX_TEST_CPU_SECONDS"]
+
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "fast_xlsx"
 
