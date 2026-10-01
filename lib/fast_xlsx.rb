@@ -222,7 +222,12 @@ module FastXlsx
 
     # [first, last] of an index or a Range.
     def bounds(indexes)
-      indexes.is_a?(Integer) ? [indexes, indexes] : indexes.minmax
+      return [indexes, indexes] if indexes.is_a?(Integer)
+
+      first, last = indexes.minmax
+      raise ArgumentError, "empty range #{indexes.inspect}" unless first
+
+      [first, last]
     end
   end
 

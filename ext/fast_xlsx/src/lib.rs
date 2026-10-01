@@ -1547,9 +1547,8 @@ impl Worksheet {
             Ok(())
         })?;
         rb_self.with_ws(|ws| {
-            if let Some(password) = password {
-                ws.protect_with_password(&password);
-            }
+            // Always set the password, so protecting again replaces it ("" is none).
+            ws.protect_with_password(password.as_deref().unwrap_or(""));
             ws.protect_with_options(&options); // keeps the password
             Ok(())
         })?;

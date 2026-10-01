@@ -77,7 +77,7 @@ module FastXlsx
                         | :use_pivot_tables | :edit_scenarios | :edit_objects
     def group_rows: (Integer | Range[Integer] rows, ?collapsed: bool) -> self
     def group_columns: (Integer | Range[Integer] columns, ?collapsed: bool) -> self
-    def protect: (?password: String?, ?allow: Array[protect_action]) -> self
+    def protect: (?password: String?, ?allow: protect_action | Array[protect_action] | nil) -> self
     def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?Format? format) -> self
     def conditional_format: (Integer first_row, Integer first_col, Integer last_row, Integer last_col,
                              type: :cell | :text | :formula | :data_bar | :color_scale,

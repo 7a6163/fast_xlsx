@@ -343,6 +343,26 @@ class TestFastXlsx < Minitest::Test
     assert_nil protection["insertRows"]
   end
 
+  def test_protect_again_replaces_the_password_and_actions
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.protect(password: "password", allow: %i[sort])
+    ws.protect
+
+    protection = sheet_protection(wb)
+    assert_nil protection["password"]
+    assert_nil protection["sort"]
+  end
+
+  def test_empty_or_reversed_ranges_raise_argument_error
+    ws = FastXlsx::Workbook.new.add_worksheet
+    [5..2, 2...2].each do |range|
+      error = assert_raises(ArgumentError) { ws.group_rows(range) }
+      assert_match(/empty range/, error.message)
+      assert_raises(ArgumentError) { ws.column_width(range, 10) }
+    end
+  end
+
   def test_protect_rejects_unknown_actions
     ws = FastXlsx::Workbook.new.add_worksheet
     error = assert_raises(ArgumentError) { ws.protect(allow: %i[sort fly]) }
