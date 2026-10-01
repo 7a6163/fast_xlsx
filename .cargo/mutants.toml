@@ -1,0 +1,7 @@
+# cargo-mutants settings (see .github/workflows/mutants.yml).
+exclude_re = [
+  # Equivalent mutant: sending every format through FastXlsx::Format._coerce,
+  # not just Hashes, changes nothing but speed (_coerce returns a Format or
+  # nil as it is), so no test can catch it.
+  'replace match guard RHash::from_value\(\*f\)\.is_some\(\) with true in Worksheet::write_any',
+]
