@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
 ### Changed
 
 - Dates and times written without a format now get `yyyy-mm-dd` (`Date`) or `yyyy-mm-dd hh:mm:ss` (`Time`, `DateTime`) instead of showing as serial numbers. A cell's own format, its table column's and `column_format` still win. Applying the format makes writing date-heavy data about 15% slower, the same as passing a date format yourself.
