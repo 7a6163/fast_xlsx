@@ -7,6 +7,8 @@ Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcn
 
 > **Status: release candidate.** The API is frozen as of 0.8: 0.8.x releases only fix bugs, and 1.0 follows once it has been in real use without needing changes.
 
+**Roadmap:** [1.0.0](https://github.com/7a6163/fast_xlsx/milestone/1) (release plan) · [1.x](https://github.com/7a6163/fast_xlsx/milestone/2) (planned features)
+
 **Contents:** [Installation](#installation) · [Getting started](#getting-started) · [Guide](#guide) · [Performance](#performance) · [Support and versioning](#support-and-versioning) · [Development](#development)
 
 ## Installation
