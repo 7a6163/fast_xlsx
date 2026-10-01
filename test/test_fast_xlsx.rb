@@ -1165,6 +1165,20 @@ class TestFastXlsx < Minitest::Test
     assert_equal [%w[a b]], rows(wb)
   end
 
+  # rust_xlsxwriter blanks the range before it notices the overlap, which
+  # wiped the earlier merge's value.
+  def test_overlapping_merge_raises_and_keeps_the_first_merge
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.merge_range("A1:B2", "first")
+    ws.merge_range("C1:D1", "beside") # touching is fine
+
+    error = assert_raises(FastXlsx::Error) { ws.merge_range("A1:D1", "second") }
+    assert_match(/overlaps.*A1:B2/, error.message)
+    assert_equal %w[A1:B2 C1:D1], sheet_doc(wb).css("mergeCell").map { |m| m["ref"] }
+    assert_equal ["first", nil, "beside"], rows(wb)[0].first(3)
+  end
+
   def test_merge_range_with_a_bad_value_leaves_no_merge
     %i[standard constant].each do |memory|
       wb = FastXlsx::Workbook.new(memory: memory)

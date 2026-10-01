@@ -66,6 +66,8 @@ struct Worksheet {
     // after add_table (rust_xlsxwriter only formats cells that already exist).
     // Owned copies, so they don't depend on the Ruby Format objects living on.
     table_formats: RefCell<Vec<TableColumnFormat>>,
+    // Merged ranges as (first_row, first_col, last_row, last_col).
+    merges: RefCell<Vec<(u32, u16, u32, u16)>>,
 }
 
 struct TableColumnFormat {
@@ -132,6 +134,7 @@ impl Workbook {
             last_written_row: Cell::new(0),
             flushes_rows: self.constant_memory || self.low_memory,
             table_formats: RefCell::new(Vec::new()),
+            merges: RefCell::new(Vec::new()),
         })
     }
 
@@ -1115,6 +1118,28 @@ impl Worksheet {
         format: Option<&Format>,
     ) -> Result<Obj<Self>, Error> {
         rb_self.check_not_flushed(ruby, first_row)?;
+        // rust_xlsxwriter blanks the range before it notices an overlap, which
+        // wipes the earlier merge's value, so check first.
+        // ponytail: linear scan; sheets have few merges.
+        let range = (first_row, first_col, last_row, last_col);
+        let overlap = rb_self
+            .merges
+            .borrow()
+            .iter()
+            .copied()
+            .find(|&(fr, fc, lr, lc)| {
+                first_row <= lr && fr <= last_row && first_col <= lc && fc <= last_col
+            });
+        if let Some((fr, fc, lr, lc)) = overlap {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                format!(
+                    "merge range {} overlaps the earlier merge {}",
+                    rust_xlsxwriter::utility::cell_range(first_row, first_col, last_row, last_col),
+                    rust_xlsxwriter::utility::cell_range(fr, fc, lr, lc),
+                ),
+            ));
+        }
         let value = CellValue::from_ruby(ruby, v)?;
         let tables = rb_self.table_formats.borrow();
         let format = Self::cell_format(&tables, first_row, first_col, format.map(|f| &*f.0));
@@ -1133,6 +1158,7 @@ impl Worksheet {
             .map_err(xerr)?;
             value.write(ws, first_row, first_col, format)
         })?;
+        rb_self.merges.borrow_mut().push(range);
         rb_self.advance(last_row);
         rb_self.note_written(first_row);
         Ok(rb_self)
