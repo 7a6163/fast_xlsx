@@ -1761,7 +1761,8 @@ class TestFastXlsx < Minitest::Test
      -> { ws.conditional_format(5, 0, 1, 0, type: :data_bar) },
      -> { ws.insert_image(0, 0, png.call, width: Float::NAN) }, -> { ws.insert_image(0, 0, png.call, scale: -1) },
      -> { ws.insert_image(0, 0, png.call, height: -10) }, -> { FastXlsx::Format.new(font_size: Float::NAN) },
-     -> { FastXlsx::Format.new(font_size: -1) }, -> { ws.margins(left: -5) }, -> { ws.margins(top: Float::NAN) }]
+     -> { FastXlsx::Format.new(font_size: -1) }, -> { FastXlsx::Format.new(font_size: 0) },
+     -> { ws.margins(left: -5) }, -> { ws.margins(top: Float::NAN) }]
       .each_with_index { |call, i| assert_raises(ArgumentError, "case #{i}", &call) }
   end
 
