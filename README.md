@@ -24,6 +24,30 @@ wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential") # Fil
 wb.save("report.xlsx")                            # or wb.to_xlsx => binary String
 ```
 
+`Workbook.new` and `add_worksheet` also take a block, which gets the new object:
+
+```ruby
+wb = FastXlsx::Workbook.new do |wb|
+  wb.add_worksheet("Users") do |ws|
+    ws.append(%w[id name email], format: { bold: true })
+    User.find_each { |u| ws << u.attributes.values_at("id", "name", "email") } # a Hash's values in column order
+  end
+end
+```
+
+### Rails
+
+```ruby
+def export
+  wb = FastXlsx::Workbook.new(memory: :constant) # large exports: memory stays flat
+  ws = wb.add_worksheet("Orders")
+  ws.append(["Order", "Customer", "Total", "Placed at"], format: { bold: true })
+  Order.includes(:customer).find_each { |o| ws << [o.number, o.customer.name, o.total, o.created_at] }
+  send_data wb.to_xlsx, filename: "orders.xlsx",
+                        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+end
+```
+
 ### Memory modes
 
 By default every cell stays in memory until the file is saved. For large exports, two modes write each finished row to a temp file instead:
@@ -79,6 +103,15 @@ ws.write(1, 2, Date.today, date)                         # format one cell
 | `border_color` | `"#RRGGBB"` or `0xRRGGBB` |
 | `locked` | `false` keeps the cell editable on a protected sheet (default `true`) |
 | `hidden` | `true` hides the cell's formula on a protected sheet |
+
+A Hash of options works wherever a format goes (equal Hashes share one format), and a format can be extended:
+
+```ruby
+ws.append(["Total", 1_234], format: { bold: true })
+title = header.merge(font_size: 16)   # header's options plus font_size; header.to_h lists them
+```
+
+In a loop over many cells, create the `Format` once: building one from a Hash on every call is slower.
 
 Per-side borders override `border`. Unknown options and invalid values raise `ArgumentError`.
 

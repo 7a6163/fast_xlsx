@@ -1825,6 +1825,31 @@ class TestFastXlsx < Minitest::Test
     assert_equal [16.0, false], [cell_style(wb, "A1")[:font_size], open_xlsx(wb).font(1, 1).bold?]
   end
 
+  # Anywhere a Format goes, a Hash of its options works too.
+  def test_hash_formats_wherever_a_format_goes
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, "w", { bold: true })
+    ws.write("B1", "r", { bold: true })
+    ws.append(%w[a b], format: { italic: true })
+    ws.append(%w[c d], format: [{ bold: true }, nil])
+    ws.merge_range("A4:B4", "m", { bold: true })
+    ws.column_format(5, { num_format: "0.0" })
+    ws.write(0, 5, 1.25)
+    ws.add_table("H1:H3", columns: [{ header: "H", format: { num_format: "0.00" } }])
+    ws.write(1, 7, 2)
+    ws.conditional_format("A1:A9", type: :cell, criteria: :>, value: 0, format: { font_color: "#FF0000" })
+    ws.write(4, 0, FastXlsx::RichString.new(["x", { bold: true }], "y"))
+
+    xlsx = open_xlsx(wb)
+    assert_equal [true, true, false, true, false, true],
+                 [[1, 1], [1, 2], [2, 1], [3, 1], [3, 2], [4, 1]].map { |r, c| xlsx.font(r, c).bold? }
+    assert_predicate xlsx.font(2, 1), :italic?
+    assert_equal %w[0.0 0.00], [xlsx.excelx_format(1, 6), xlsx.excelx_format(2, 8)]
+    assert_equal "FFFF0000", conditional_formats(wb).first[:font_color]
+    assert_equal [["x", true, false], ["y", false, false]], rich_runs(wb)
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")

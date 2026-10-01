@@ -74,7 +74,9 @@ module FastXlsx
     def initialize(*parts)
       raise ArgumentError, "RichString needs at least one segment" if parts.empty?
 
-      @segments = parts.map { |part| part.is_a?(Array) ? [part[0].to_s, part[1]] : [part.to_s, nil] }.freeze
+      @segments = parts.map do |part|
+        part.is_a?(Array) ? [part[0].to_s, Format.coerce(part[1])] : [part.to_s, nil]
+      end.freeze
     end
   end
 
@@ -187,7 +189,7 @@ module FastXlsx
   #   @param value [Numeric, String, Time, Date, DateTime, true, false, nil,
   #     Formula, URL, RichString, #to_s] dates get yyyy-mm-dd (hh:mm:ss) unless
   #     the format has a num_format
-  #   @param format [Format, nil]
+  #   @param format [Format, Hash, nil] a Hash of options works too
   #   @return [self]
   #
   # @!method <<(values)
@@ -255,18 +257,18 @@ module FastXlsx
     # wrapper. Other forms come here.
     def _write_ref(*args)
       row, col, (value, format) = CellRange.cell(args, 1..2)
-      _write(row, col, value, format)
+      _write(row, col, value, Format.coerce(format))
       self
     end
     private :_write_ref
 
     # Appends a row after the last row written.
     # @param values [Array] cell values, as for {#write}
-    # @param format [Format, Array<Format, nil>, nil] one for every cell, or
+    # @param format [Format, Hash, Array<Format, Hash, nil>, nil] one for every cell, or
     #   one per cell
     # @return [self]
     def append(values, format: nil)
-      _append(values, format)
+      _append(values, format.is_a?(Array) ? format.map { |f| Format.coerce(f) } : Format.coerce(format))
     end
 
     # @param columns [Integer, Range<Integer>]
@@ -303,7 +305,7 @@ module FastXlsx
     # @raise [FastXlsx::Error] when it overlaps an earlier merge
     def merge_range(*args)
       range, (value, format) = CellRange.split(args, 1..2)
-      _merge_range(*range, value, format)
+      _merge_range(*range, value, Format.coerce(format))
     end
 
     # Highlights cells in the range by rule; see the README for each type's
@@ -312,11 +314,12 @@ module FastXlsx
     # @param type [Symbol] :cell, :text, :formula, :data_bar or :color_scale
     # @option options [Symbol] :criteria e.g. :>, :between, :contains
     # @option options [Numeric, String, Array] :value
-    # @option options [Format] :format
+    # @option options [Format, Hash] :format
     # @option options [Integer] :colors 2 or 3 (:color_scale)
     # @return [self]
-    def conditional_format(*range, type:, **)
-      _conditional_format(*CellRange.split(range).first, { type: type, ** })
+    def conditional_format(*range, type:, **options)
+      options[:format] = Format.coerce(options[:format]) if options.key?(:format)
+      _conditional_format(*CellRange.split(range).first, { type: type, **options })
     end
 
     # Restricts what can be entered in the range; see the README.
@@ -376,8 +379,13 @@ module FastXlsx
     # @option options [String] :name
     # @option options [Boolean] :total_row, :banded_rows, :autofilter
     # @return [self]
-    def add_table(*range, **)
-      _add_table(*CellRange.split(range).first, { ** })
+    def add_table(*range, **options)
+      if options[:columns].is_a?(Array)
+        options[:columns] = options[:columns].map do |column|
+          column.is_a?(Hash) && column.key?(:format) ? column.merge(format: Format.coerce(column[:format])) : column
+        end
+      end
+      _add_table(*CellRange.split(range).first, options)
     end
 
     # Printed page header, using Excel codes such as "&CPage &P of &N".
@@ -518,20 +526,20 @@ module FastXlsx
     # may combine them or show the row's. Each row is kept (about 1 KB) until
     # saving, so style a whole sheet with {#column_format}.
     # @param rows [Integer, Range<Integer>]
-    # @param format [Format]
+    # @param format [Format, Hash]
     # @return [self]
     # @raise [FastXlsx::Error] in :constant / :low mode, for rows already on disk
     def row_format(rows, format)
-      _row_format(*CellRange.bounds(rows), format)
+      _row_format(*CellRange.bounds(rows), Format.coerce(format))
       self
     end
 
     # Default format for cells in these columns that are written without one.
     # @param columns [Integer, Range<Integer>]
-    # @param format [Format]
+    # @param format [Format, Hash]
     # @return [self]
     def column_format(columns, format)
-      _column_format(*CellRange.bounds(columns), format)
+      _column_format(*CellRange.bounds(columns), Format.coerce(format))
       self
     end
   end
@@ -656,6 +664,19 @@ module FastXlsx
     # @return [Hash{Symbol => Object}] frozen
     def to_h
       @options
+    end
+
+    # A Format for a Hash of options; equal Hashes share one, so a Hash written
+    # with every row costs no more than a Format made once. Other values are
+    # returned as they are.
+    # ponytail: the cache is never emptied; it holds one Format per distinct
+    # Hash, which stays small unless options are generated per cell.
+    # @api private
+    def self.coerce(format)
+      return format unless format.is_a?(Hash)
+
+      cache = (@cache ||= {})
+      cache.fetch(format) { cache[format.dup.freeze] = new(**format) }
     end
 
     # A new format with these options added to (or replacing) this one's.

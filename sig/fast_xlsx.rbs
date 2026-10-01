@@ -8,11 +8,14 @@ module FastXlsx
     def read: () -> String
   end
 
+  # A Format, or a Hash of its options.
+  type format = Format | Hash[Symbol, untyped]
+
   type cell = Numeric | String | Time | Date | Formula | URL | RichString | bool | nil | _ToS
 
   class RichString
     attr_reader segments: Array[[String, Format?]]
-    def initialize: (*(_ToS | [_ToS, Format?]) parts) -> void
+    def initialize: (*(_ToS | [_ToS, format?]) parts) -> void
   end
 
   class Formula
@@ -28,8 +31,8 @@ module FastXlsx
 
   class Workbook
     MEMORY_MODES: Array[Symbol]
-    def self.new: (?memory: :standard | :constant | :low) -> Workbook
-    def add_worksheet: (?String? name) -> Worksheet
+    def self.new: (?memory: :standard | :constant | :low) ?{ (Workbook) -> void } -> Workbook
+    def add_worksheet: (?String? name) ?{ (Worksheet) -> void } -> Worksheet
     def worksheets: () -> Array[Worksheet]
     def worksheet: (String name) -> Worksheet?
     def properties: (?title: String, ?subject: String, ?author: String, ?manager: String,
@@ -53,18 +56,21 @@ module FastXlsx
                    ?rotation: Integer, ?indent: Integer,
                    ?border: border, ?border_left: border, ?border_right: border,
                    ?border_top: border, ?border_bottom: border, ?border_color: color) -> Format
+    def to_h: () -> Hash[Symbol, untyped]
+    def merge: (**untyped options) -> Format
+    def self.coerce: (format? format) -> Format?
   end
 
   class Worksheet
-    def write: (Integer row, Integer col, cell value, ?Format? format) -> self
-             | (String cell, cell value, ?Format? format) -> self
-    def append: (Array[cell] values, ?format: Format? | Array[Format?]) -> self
+    def write: (Integer row, Integer col, cell value, ?format? format) -> self
+             | (String cell, cell value, ?format? format) -> self
+    def append: (Array[cell] values, ?format: format? | Array[format?]) -> self
     def <<: (Array[cell] row) -> self
     def concat: (Array[Array[cell]] rows) -> self
     def column_width: (Integer | Range[Integer] columns, Numeric width) -> self
     def hide_rows: (Integer | Range[Integer] rows) -> self
     def hide_columns: (Integer | Range[Integer] columns) -> self
-    def row_format: (Integer | Range[Integer] rows, Format format) -> self
+    def row_format: (Integer | Range[Integer] rows, format format) -> self
     def default_row_height: (Numeric height) -> self
     def selection: (*cell_range range) -> self
     def top_left_cell: (Integer row, Integer col) -> self
@@ -74,7 +80,7 @@ module FastXlsx
                          | :inconsistent_column_formula
     def ignore_error: (*cell_range | ignorable_error args) -> self
     def unprotect_range: (*cell_range range, ?name: String?, ?password: String?) -> self
-    def column_format: (Integer | Range[Integer] columns, Format format) -> self
+    def column_format: (Integer | Range[Integer] columns, format format) -> self
     def autofit: () -> self
     # A cell range: four 0-based numbers, an Excel reference ("A1:D10"), or
     # rows and columns as Integers or Ranges. Methods with options take it as
@@ -107,13 +113,13 @@ module FastXlsx
     def group_rows: (Integer | Range[Integer] rows, ?collapsed: bool) -> self
     def group_columns: (Integer | Range[Integer] columns, ?collapsed: bool) -> self
     def protect: (?password: String?, ?allow: protect_action | Array[protect_action] | nil) -> self
-    def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?Format? format) -> self
-                   | (String range, cell value, ?Format? format) -> self
-                   | (indexes rows, indexes cols, cell value, ?Format? format) -> self
+    def merge_range: (Integer first_row, Integer first_col, Integer last_row, Integer last_col, cell value, ?format? format) -> self
+                   | (String range, cell value, ?format? format) -> self
+                   | (indexes rows, indexes cols, cell value, ?format? format) -> self
     def conditional_format: (*cell_range range,
                              type: :cell | :text | :formula | :data_bar | :color_scale,
                              ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
-                             ?format: Format, ?colors: 2 | 3) -> self
+                             ?format: format, ?colors: 2 | 3) -> self
     def data_validation: (*cell_range range,
                           type: :list | :whole_number | :decimal | :text_length,
                           ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
@@ -133,7 +139,7 @@ module FastXlsx
                     | (String cell, type: Symbol, series: Array[chart_series],
                        ?title: String, ?x_axis: String, ?y_axis: String,
                        ?width: Integer, ?height: Integer) -> self
-    type table_column = String | { header: String, ?total: Symbol, ?total_label: String, ?format: Format }
+    type table_column = String | { header: String, ?total: Symbol, ?total_label: String, ?format: format }
 
     def add_table: (*cell_range range,
                     ?columns: Array[table_column], ?style: Symbol, ?name: String,

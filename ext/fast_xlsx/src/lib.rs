@@ -33,6 +33,7 @@ static ERROR: Lazy<ExceptionClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Err
 static FORMULA: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Formula"));
 static URL: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "URL"));
 static RICH_STRING: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "RichString"));
+static FORMAT: Lazy<RClass> = Lazy::new(|ruby| fast_xlsx_const(ruby, "Format"));
 
 // A row or column outside the sheet is a RangeError, like a negative one
 // (which fails converting to an unsigned number before reaching the writer).
@@ -1172,8 +1173,16 @@ impl Worksheet {
     fn write_any(ruby: &Ruby, rb_self: Obj<Self>, args: &[Value]) -> Result<Obj<Self>, Error> {
         let index = |i: usize| args.get(i).and_then(|v| Integer::from_value(*v));
         if let (3 | 4, Some(row), Some(col)) = (args.len(), index(0), index(1)) {
-            let format = match args.get(3) {
-                Some(f) => Option::<&Format>::try_convert(*f)?,
+            // A Hash of options becomes a (cached) Format, as in Ruby.
+            let format_arg = match args.get(3) {
+                Some(f) if RHash::from_value(*f).is_some() => Some(
+                    ruby.get_inner(&FORMAT)
+                        .funcall::<_, _, Value>("coerce", (*f,))?,
+                ),
+                f => f.copied(),
+            };
+            let format = match format_arg {
+                Some(f) => Option::<&Format>::try_convert(f)?,
                 None => None,
             };
             Self::write(
