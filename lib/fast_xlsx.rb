@@ -111,21 +111,33 @@ module FastXlsx
     #   must be filled top to bottom: :constant stores strings inline (memory
     #   stays flat), :low keeps Excel's shared string table (memory grows with
     #   the number of unique strings).
+    # @yieldparam workbook [Workbook] when a block is given
+    # @return [Workbook]
     # @raise [ArgumentError] for an unknown mode
+    # @example
+    #   wb = FastXlsx::Workbook.new do |wb|
+    #     wb.add_worksheet("Report") { |ws| ws << %w[id name] }
+    #   end
     def self.new(memory: :standard)
       unless MEMORY_MODES.include?(memory)
         raise ArgumentError, "unknown memory mode #{memory.inspect} (expected one of #{MEMORY_MODES.join(", ")})"
       end
 
-      _new(memory == :constant, memory == :low)
+      workbook = _new(memory == :constant, memory == :low)
+      yield workbook if block_given?
+      workbook
     end
 
     # @param name [String, nil] nil takes the first free "SheetN"
+    # @yieldparam worksheet [Worksheet] when a block is given
     # @return [Worksheet]
     # @raise [FastXlsx::Error] for an invalid name or one already used
     #   (names ignore case)
     def add_worksheet(name = nil)
-      _add_worksheet(name).tap { |ws| worksheets << ws }
+      worksheet = _add_worksheet(name)
+      worksheets << worksheet
+      yield worksheet if block_given?
+      worksheet
     end
 
     # The same Worksheet objects add_worksheet returned, so their append
@@ -634,8 +646,24 @@ module FastXlsx
     # @raise [ArgumentError] for an unknown option or an invalid value
     def self.new(**options)
       # Apply border: first so border_left: etc. override it whatever the order.
-      options = { border: options[:border], **options.except(:border) } if options.key?(:border)
-      _new(options)
+      ordered = options.key?(:border) ? { border: options[:border], **options.except(:border) } : options
+      format = _new(ordered)
+      format.instance_variable_set(:@options, options.dup.freeze)
+      format
+    end
+
+    # The options this format was created with.
+    # @return [Hash{Symbol => Object}] frozen
+    def to_h
+      @options
+    end
+
+    # A new format with these options added to (or replacing) this one's.
+    # @example
+    #   title = header.merge(font_size: 16)
+    # @return [Format]
+    def merge(**)
+      Format.new(**to_h, **)
     end
   end
 end

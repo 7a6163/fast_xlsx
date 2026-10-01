@@ -1796,6 +1796,35 @@ class TestFastXlsx < Minitest::Test
     assert_equal [[nil, "x"]], rows(wb)
   end
 
+  # Like Ruby's own constructors, a block gets the new object, which is returned.
+  def test_workbook_and_worksheet_yield_to_a_block
+    yielded = nil
+    wb = FastXlsx::Workbook.new(memory: :constant) do |w|
+      yielded = w
+      w.add_worksheet("Report") { |ws| ws << ["inside"] }
+    end
+
+    assert_same wb, yielded
+    assert_equal "Report", wb.worksheets.first.name
+    assert_equal [["inside"]], rows(wb)
+    ws = wb.add_worksheet { |s| s << [1] }
+    assert_kind_of FastXlsx::Worksheet, ws
+  end
+
+  def test_format_to_h_and_merge
+    bold = FastXlsx::Format.new(bold: true, font_color: "#FF0000")
+    assert_equal({ bold: true, font_color: "#FF0000" }, bold.to_h)
+    assert_predicate bold.to_h, :frozen?
+
+    title = bold.merge(font_size: 16, bold: false)
+    assert_equal({ bold: false, font_color: "#FF0000", font_size: 16 }, title.to_h)
+    assert_equal({ bold: true, font_color: "#FF0000" }, bold.to_h) # unchanged
+
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, "x", title)
+    assert_equal [16.0, false], [cell_style(wb, "A1")[:font_size], open_xlsx(wb).font(1, 1).bold?]
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")
