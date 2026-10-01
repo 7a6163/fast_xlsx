@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-02
+
 ### Changed
 
 - The API is frozen for 1.0: 0.8.x releases only fix bugs. The README states the deprecation policy.
