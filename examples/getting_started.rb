@@ -33,9 +33,10 @@ ws.append(["Total", nil, FastXlsx::Formula.new("SUM(C2:C#{last})"), nil, nil,
            FastXlsx::Formula.new("SUM(F2:F#{last})")],
           format: [header, header, header, header, header, header.merge(num_format: "#,##0.00")])
 
-# 5. Easier to read: columns sized to fit, the header kept in view while
+# 5. Easier to read: columns sized to fit (set by hand where autofit can't tell), the header kept in view while
 #    scrolling, and filter buttons on the header (rows and columns count from 0).
 ws.autofit
+ws.column_width(3..5, 12) # money, dates, formulas: autofit measures raw values
 ws.freeze_panes("A2")
 ws.autofilter("A1:F#{last}")
 

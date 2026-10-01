@@ -52,6 +52,27 @@ fn xerr(e: XlsxError) -> Error {
 
 // Excel's limits that rust_xlsxwriter doesn't check: a negative width or
 // height hides the column or row, a larger one is capped or invalid.
+const BOTH_FORMATS: &str = "pass the format either positionally or as format:, not both";
+
+// The format from write's keywords ({ format: f }); others are rejected.
+fn format_keyword(ruby: &Ruby, keywords: Value) -> Result<Value, Error> {
+    let keywords = RHash::try_convert(keywords)?;
+    let format = ruby.to_symbol("format");
+    keywords.foreach(|key: Value, _: Value| {
+        if key.eql(format)? {
+            Ok(ForEach::Continue)
+        } else {
+            Err(Error::new(
+                ruby.exception_arg_error(),
+                format!("unknown keyword: {}", key.inspect()),
+            ))
+        }
+    })?;
+    Ok(keywords
+        .get(format)
+        .unwrap_or_else(|| ruby.qnil().as_value()))
+}
+
 // A size that must be a finite number above 0 (NaN or a negative one would
 // be written into the file as is).
 fn check_positive(ruby: &Ruby, what: &str, size: f64) -> Result<f64, Error> {
@@ -1171,21 +1192,25 @@ impl Worksheet {
     // here rather than in a Ruby wrapper, since it runs once per cell; the
     // rest ("B2", or a wrong argument count) goes to Ruby's _write_ref.
     fn write_any(ruby: &Ruby, rb_self: Obj<Self>, args: &[Value]) -> Result<Obj<Self>, Error> {
+        // A real format: keyword arrives as a trailing Hash; Ruby says whether
+        // it was one, so a Hash written as the value isn't mistaken for it.
+        let keyword_given = unsafe { rb_sys::rb_keyword_given_p() } != 0;
+        let (args, keyword) = match (keyword_given, args.split_last()) {
+            (true, Some((last, rest))) => (rest, Some(format_keyword(ruby, *last)?)),
+            _ => (args, None),
+        };
         let index = |i: usize| args.get(i).and_then(|v| Integer::from_value(*v));
         if let (3 | 4, Some(row), Some(col)) = (args.len(), index(0), index(1)) {
-            // write(r, c, v, format: f) passes its keyword as a trailing Hash.
-            let keyword = args
-                .get(3)
-                .and_then(|v| RHash::from_value(*v))
-                .filter(|h| h.len() == 1)
-                .and_then(|h| h.get(ruby.to_symbol("format")));
+            if keyword.is_some() && args.len() == 4 {
+                return Err(Error::new(ruby.exception_arg_error(), BOTH_FORMATS));
+            }
             // A Hash of options becomes a (cached) Format, as in Ruby.
-            let format_arg = match keyword.as_ref().or(args.get(3)) {
-                Some(f) if RHash::from_value(*f).is_some() => Some(
+            let format_arg = match keyword.or_else(|| args.get(3).copied()) {
+                Some(f) if RHash::from_value(f).is_some() => Some(
                     ruby.get_inner(&FORMAT)
-                        .funcall::<_, _, Value>("_coerce", (*f,))?,
+                        .funcall::<_, _, Value>("_coerce", (f,))?,
                 ),
-                f => f.copied(),
+                f => f,
             };
             let format = match format_arg {
                 Some(f) => Option::<&Format>::try_convert(f)?,
@@ -1201,7 +1226,14 @@ impl Worksheet {
             )?;
             return Ok(rb_self);
         }
-        rb_self.funcall("_write_ref", args)
+        rb_self.funcall(
+            "_write_ref",
+            (
+                ruby.ary_from_iter(args.iter().copied()),
+                keyword.is_some(),
+                keyword,
+            ),
+        )
     }
 
     fn write(

@@ -57,9 +57,10 @@ ws.append(["Total", nil, FastXlsx::Formula.new("SUM(C2:C#{last})"), nil, nil,
            FastXlsx::Formula.new("SUM(F2:F#{last})")],
           format: [header, header, header, header, header, header.merge(num_format: "#,##0.00")])
 
-# 5. Easier to read: columns sized to fit, the header kept in view while
+# 5. Easier to read: columns sized to fit (set by hand where autofit can't tell), the header kept in view while
 #    scrolling, and filter buttons on the header (rows and columns count from 0).
 ws.autofit
+ws.column_width(3..5, 12) # money, dates, formulas: autofit measures raw values
 ws.freeze_panes("A2")
 ws.autofilter("A1:F#{last}")
 
@@ -90,7 +91,7 @@ ws << ["id", "name", "created_at"]                # append a row
 ws.concat(records.map { |r| [r.id, r.name, r.created_at] })  # append many rows in one call
 ws.write(0, 5, 42)                                # write a single cell (row, col, value)
 ws.write("F1", 42)                                # or by its Excel reference
-ws.write("F1", 42, bold)                          # a format positionally, or as format: like append
+ws.write("F1", 42, { bold: true })                # a format positionally, or as format: like append
 ws["F1"] = 42                                     # the same (ws[0, 5] = 42 too)
 
 wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential") # File > Info in Excel
@@ -444,7 +445,7 @@ BUNDLE_GEMFILE=bench/Gemfile /usr/bin/time -l bundle exec ruby bench/memory.rb f
 - **Ruby:** CRuby 3.3 and later. A Ruby version is dropped only after it reaches its end of life, and only in a minor release. JRuby and TruffleRuby are not supported (this is a native extension).
 - **Precompiled gems:** Linux (x86_64 and aarch64, glibc and musl; ARM musl), macOS (arm64 and x86_64) and Windows (x64). Before each release the Linux x86_64, macOS arm64 and Windows gems are installed and loaded on Ruby 3.3, 3.4 and 4.0. Other platforms build from source and need a Rust toolchain.
 - **Versions:** from 1.0, [Semantic Versioning](https://semver.org): no breaking API change before 2.0. Until then a minor release (0.x.0) can change behaviour; the [changelog](CHANGELOG.md) lists every change under "Changed".
-- **Deprecations:** from 1.0, a method or option to be removed first warns (`Warning[:deprecated]`) for at least one minor release, with the CHANGELOG naming its replacement; it goes only in the next major version.
+- **Deprecations:** from 1.0, a method or option to be removed first prints a warning (with `warn`, so on by default) for at least one minor release, with the CHANGELOG naming its replacement; it goes only in the next major version.
 - **Output:** `.xlsx` files that open in Excel 2007 and later, LibreOffice and Google Sheets. Updating rust_xlsxwriter can change the bytes of the file but not what it contains.
 
 ## Development

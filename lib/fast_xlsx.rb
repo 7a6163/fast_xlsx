@@ -255,30 +255,19 @@ module FastXlsx
   #   Hides the gridlines on screen (see {#page_setup} for printing).
   #   @return [self]
   class Worksheet
+    NO_FORMAT = Object.new.freeze # format: not given
+    private_constant :NO_FORMAT
+
     # write(row, col, value, format = nil) or write("B2", value, format = nil)
     # is native: the (row, col) form runs once per cell, so it skips a Ruby
     # wrapper. Other forms come here.
-    def _write_ref(*args)
-      args = format_keyword(args)
+    def _write_ref(args, keyword_given, keyword_format)
       row, col, (value, format) = CellRange.cell(args, 1..2)
+      format = Format.check_both(args.size > (args.first.is_a?(String) ? 2 : 3), keyword_given, format, keyword_format)
       _write(row, col, value, Format._coerce(format))
       self
     end
     private :_write_ref
-
-    # A trailing { format: f } (the keyword form) as a positional format, so
-    # write and merge_range take the format either way, like append.
-    def format_keyword(args)
-      last = args.last
-      return args unless last.is_a?(Hash) && last.keys == [:format]
-
-      args = args[0...-1]
-      cell_args = args.first.is_a?(String) ? 2 : 3
-      raise ArgumentError, "pass the format either positionally or as format:, not both" if args.size > cell_args
-
-      args + [last[:format]]
-    end
-    private :format_keyword
 
     # Writes one cell: ws["B2"] = 42 or ws[1, 1] = 42. Use {#write} to give
     # it a format.
@@ -332,8 +321,9 @@ module FastXlsx
     # @overload merge_range(*range, value, format: nil)
     # @return [self]
     # @raise [FastXlsx::Error] when it overlaps an earlier merge
-    def merge_range(*args)
-      range, (value, format) = CellRange.split(format_keyword(args), 1..2)
+    def merge_range(*args, format: NO_FORMAT)
+      range, (value, positional) = CellRange.split(args, 1..2)
+      format = Format.check_both(!positional.nil?, !NO_FORMAT.equal?(format), positional, format)
       _merge_range(*range, value, Format._coerce(format))
     end
 
@@ -743,6 +733,15 @@ module FastXlsx
       end
 
       Format.new(**to_h, **other.to_h, **)
+    end
+
+    # The format given positionally or as format:, raising if both were.
+    # @api private
+    def self.check_both(positional_given, keyword_given, positional, keyword)
+      return positional unless keyword_given
+      raise ArgumentError, "pass the format either positionally or as format:, not both" if positional_given
+
+      keyword
     end
 
     # Distinct Hashes kept by {._coerce}; past this, the oldest is dropped.

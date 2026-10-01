@@ -1948,6 +1948,24 @@ class TestFastXlsx < Minitest::Test
     assert_raises(ArgumentError) { ws.write(0, 3, "d", bold, format: bold) } # not both
   end
 
+  # Only a real keyword is the format; a Hash given as an argument is a value.
+  def test_format_keyword_is_told_apart_from_a_hash_argument
+    bold = FastXlsx::Format.new(bold: true)
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.merge_range(0, 0, 0, 1, "four numbers", format: bold)
+    ws.merge_range(0..0, 2..3, "rows and cols", format: bold)
+    ws.write(1, 0, { format: 7 }) # the value, written with to_s
+    ws.write("B2", { format: 7 })
+
+    xlsx = open_xlsx(wb)
+    assert [xlsx.font(1, 1).bold?, xlsx.font(1, 3).bold?].all?
+    assert_equal [{ format: 7 }.to_s] * 2, [xlsx.cell(2, 1), xlsx.cell(2, 2)]
+    error = assert_raises(ArgumentError) { ws.write(2, 0, "x", format: bold, fmt: 1) }
+    assert_match(/unknown keyword.*fmt/, error.message)
+    assert_raises(ArgumentError) { ws.merge_range("A4:B4", "x", bold, format: bold) } # not both
+  end
+
   def test_properties
     wb = FastXlsx::Workbook.new
     wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential", company: "Acme")
