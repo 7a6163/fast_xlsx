@@ -332,7 +332,12 @@ BUNDLE_GEMFILE=bench/Gemfile /usr/bin/time -l bundle exec ruby bench/memory.rb f
 bundle add fast_xlsx
 ```
 
-Precompiled gems are built for common platforms; other platforms need a Rust toolchain to install. Requires CRuby 3.3+; JRuby and TruffleRuby are not supported because this is a native extension.
+### Support and versioning
+
+- **Ruby:** CRuby 3.3 and later. A Ruby version is dropped only after it reaches its end of life, and only in a minor release. JRuby and TruffleRuby are not supported (this is a native extension).
+- **Precompiled gems:** Linux (x86_64 and aarch64, glibc and musl; ARM musl), macOS (arm64 and x86_64) and Windows (x64). Before each release the Linux x86_64, macOS arm64 and Windows gems are installed and loaded on Ruby 3.3, 3.4 and 4.0. Other platforms build from source and need a Rust toolchain.
+- **Versions:** from 1.0, [Semantic Versioning](https://semver.org): no breaking API change before 2.0. Until then a minor release (0.x.0) can change behaviour; the [changelog](CHANGELOG.md) lists every change under "Changed".
+- **Output:** `.xlsx` files that open in Excel 2007 and later, LibreOffice and Google Sheets. Updating rust_xlsxwriter can change the bytes of the file but not what it contains.
 
 ## Development
 
