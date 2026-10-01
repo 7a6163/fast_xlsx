@@ -76,6 +76,8 @@ ws.write(1, 2, Date.today, date)                         # format one cell
 | `valign` | `:top`, `:center`, `:bottom` |
 | `border`, `border_left`, `border_right`, `border_top`, `border_bottom` | `:thin`, `:medium`, `:thick`, `:dashed`, `:dotted`, `:double`, `:hair` |
 | `border_color` | `"#RRGGBB"` or `0xRRGGBB` |
+| `locked` | `false` keeps the cell editable on a protected sheet (default `true`) |
+| `hidden` | `true` hides the cell's formula on a protected sheet |
 
 Per-side borders override `border`. Unknown options and invalid values raise `ArgumentError`.
 
@@ -103,6 +105,17 @@ ws.page_header("&CPage &P of &N")               # printed header, Excel header/f
 ws.page_footer("&L&A", margin: 0.2)             # sheet name on the left; margin in inches
 ws.margins(left: 0.5, top: 1)              # other margins keep Excel's defaults
 ```
+
+### Protection
+
+```ruby
+input = FastXlsx::Format.new(locked: false)
+ws.write(1, 1, 0, input)                                  # B2 stays editable
+ws.protect                                                # lock everything else
+ws.protect(password: "secret", allow: %i[sort use_autofilter]) # or with a password and allowed actions
+```
+
+`allow:` takes `:format_cells`, `:format_columns`, `:format_rows`, `:insert_columns`, `:insert_rows`, `:insert_links`, `:delete_columns`, `:delete_rows`, `:sort`, `:use_autofilter`, `:use_pivot_tables`, `:edit_scenarios`, `:edit_objects`. The password only stops editing in Excel; it does not encrypt the file.
 
 ### Conditional formats
 

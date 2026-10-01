@@ -192,6 +192,15 @@ module FastXlsx
       self
     end
 
+    # Locks the sheet against editing. Cells whose format has locked: false
+    # stay editable. allow: actions users may still take, any of :format_cells,
+    # :format_columns, :format_rows, :insert_columns, :insert_rows,
+    # :insert_links, :delete_columns, :delete_rows, :sort, :use_autofilter,
+    # :use_pivot_tables, :edit_scenarios, :edit_objects.
+    def protect(password: nil, allow: [])
+      _protect(password, Array(allow))
+    end
+
     # Default format for cells in these columns that are written without one.
     def column_format(columns, format)
       _column_format(*column_bounds(columns), format)

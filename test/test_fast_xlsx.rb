@@ -317,6 +317,50 @@ class TestFastXlsx < Minitest::Test
     assert_equal "#,##0.00", xlsx.excelx_format(1, 3)
   end
 
+  def sheet_protection(workbook)
+    Nokogiri::XML(sheet_xml(workbook)).remove_namespaces!.at("sheetProtection")&.to_h
+  end
+
+  def test_protect_locks_the_sheet
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+
+    assert_same ws, ws.protect
+    protection = sheet_protection(wb)
+    assert_equal "1", protection["sheet"]
+    assert_nil protection["password"]
+    assert_nil protection["sort"] # not allowed
+  end
+
+  # In sheetProtection, "0" means the action is allowed.
+  def test_protect_with_a_password_and_allowed_actions
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.protect(password: "password", allow: %i[sort format_cells])
+
+    protection = sheet_protection(wb)
+    assert_equal "83AF", protection["password"] # Excel's hash of "password"
+    assert_equal %w[0 0], protection.values_at("sort", "formatCells")
+    assert_nil protection["insertRows"]
+  end
+
+  def test_protect_rejects_unknown_actions
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.protect(allow: %i[sort fly]) }
+    assert_match(/:fly/, error.message)
+  end
+
+  def test_format_locked_false_and_hidden_for_protected_sheets
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.write(0, 0, 1, FastXlsx::Format.new(locked: false))
+    ws.write(0, 1, FastXlsx::Formula.new("1+1"), FastXlsx::Format.new(hidden: true))
+    ws.write(0, 2, 2, FastXlsx::Format.new(locked: true, hidden: false))
+
+    assert_equal [false, false], cell_style(wb, "A1").values_at(:locked, :hidden)
+    assert_equal [true, true], cell_style(wb, "B1").values_at(:locked, :hidden)
+    assert_equal [true, false], cell_style(wb, "C1").values_at(:locked, :hidden)
+  end
+
   def test_freeze_panes_freezes_rows_above_and_columns_left
     wb = FastXlsx::Workbook.new
     wb.add_worksheet.freeze_panes(1, 2)

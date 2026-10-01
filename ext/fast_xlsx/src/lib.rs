@@ -15,7 +15,8 @@ use rust_xlsxwriter::{
 };
 
 use rust_xlsxwriter::{
-    Chart, ChartType, DocProperties, Image, Note, Table, TableColumn, TableFunction, TableStyle,
+    Chart, ChartType, DocProperties, Image, Note, ProtectionOptions, Table, TableColumn,
+    TableFunction, TableStyle,
 };
 
 // These constants are defined in lib/fast_xlsx.rb before this extension loads.
@@ -653,6 +654,25 @@ fn table_column(
     Ok((column, format))
 }
 
+// Actions users may still take on a protected sheet (selecting cells is
+// always allowed).
+type ProtectionFlag = fn(&mut ProtectionOptions) -> &mut bool;
+const PROTECTION_ALLOW: &[(&str, ProtectionFlag)] = &[
+    ("format_cells", |o| &mut o.format_cells),
+    ("format_columns", |o| &mut o.format_columns),
+    ("format_rows", |o| &mut o.format_rows),
+    ("insert_columns", |o| &mut o.insert_columns),
+    ("insert_rows", |o| &mut o.insert_rows),
+    ("insert_links", |o| &mut o.insert_links),
+    ("delete_columns", |o| &mut o.delete_columns),
+    ("delete_rows", |o| &mut o.delete_rows),
+    ("sort", |o| &mut o.sort),
+    ("use_autofilter", |o| &mut o.use_autofilter),
+    ("use_pivot_tables", |o| &mut o.use_pivot_tables),
+    ("edit_scenarios", |o| &mut o.edit_scenarios),
+    ("edit_objects", |o| &mut o.edit_objects),
+];
+
 const BORDERS: &[(&str, FormatBorder)] = &[
     ("thin", FormatBorder::Thin),
     ("medium", FormatBorder::Medium),
@@ -710,6 +730,11 @@ impl Format {
                 }
                 "indent" => taken.set_indent(u8::try_convert(value)?),
                 "shrink" if value.to_bool() => taken.set_shrink(),
+                // For protected sheets: locked: false leaves a cell editable,
+                // hidden: true hides its formula.
+                "locked" if value.to_bool() => taken.set_locked(),
+                "locked" => taken.set_unlocked(),
+                "hidden" if value.to_bool() => taken.set_hidden(),
                 "border_color" => taken.set_border_color(color(ruby, value)?),
                 "num_format" => taken.set_num_format(String::try_convert(value)?),
                 "font_size" => taken.set_font_size(f64::try_convert(value)?),
@@ -742,7 +767,8 @@ impl Format {
                 "border_right" => taken.set_border_right(choice(ruby, "border", value, BORDERS)?),
                 "border_top" => taken.set_border_top(choice(ruby, "border", value, BORDERS)?),
                 "border_bottom" => taken.set_border_bottom(choice(ruby, "border", value, BORDERS)?),
-                "bold" | "italic" | "underline" | "text_wrap" | "strikeout" | "shrink" => taken,
+                "bold" | "italic" | "underline" | "text_wrap" | "strikeout" | "shrink"
+                | "hidden" => taken,
                 other => {
                     return Err(Error::new(
                         ruby.exception_arg_error(),
@@ -1451,6 +1477,27 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn protect(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        password: Option<String>,
+        allow: RArray,
+    ) -> Result<Obj<Self>, Error> {
+        let mut options = ProtectionOptions::new();
+        each_entry(allow, |_, action| {
+            *choice(ruby, "protect action", action, PROTECTION_ALLOW)?(&mut options) = true;
+            Ok(())
+        })?;
+        rb_self.with_ws(|ws| {
+            if let Some(password) = password {
+                ws.protect_with_password(&password);
+            }
+            ws.protect_with_options(&options); // keeps the password
+            Ok(())
+        })?;
+        Ok(rb_self)
+    }
+
     fn name(&self) -> Result<String, Error> {
         self.with_ws(|ws| Ok(ws.name()))
     }
@@ -1498,6 +1545,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "vertical_page_breaks",
         method!(Worksheet::set_vertical_page_breaks, 1),
     )?;
+    ws.define_method("_protect", method!(Worksheet::protect, 2))?;
     ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;
 
     let format = module.define_class("Format", ruby.class_object())?;

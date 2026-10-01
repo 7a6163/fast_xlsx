@@ -184,6 +184,7 @@ module XlsxHelpers
       align: align&.[]("horizontal"), valign: align&.[]("vertical"), text_wrap: align&.[]("wrapText") == "1",
       rotation: align&.[]("textRotation")&.to_i, indent: align&.[]("indent")&.to_i,
       shrink: align&.[]("shrinkToFit") == "1",
+      locked: cell_xf.at("protection")&.[]("locked") != "0", hidden: cell_xf.at("protection")&.[]("hidden") == "1",
       border: %w[left right top bottom].to_h { |side| [side.to_sym, border.at(side)&.[]("style")] },
       border_color: %w[left right top bottom].to_h { |side| [side.to_sym, border.at("#{side} > color")&.[]("rgb")] }
     }
