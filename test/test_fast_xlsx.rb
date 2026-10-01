@@ -1484,6 +1484,13 @@ class TestFastXlsx < Minitest::Test
     refute_match(/overlaps/, error.message)
   end
 
+  def test_page_setup_takes_excels_paper_number
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.page_setup(paper: 11) # A5
+
+    assert_equal "11", sheet_doc(wb).at("pageSetup")["paperSize"]
+  end
+
   def test_page_setup_rejects_unknown_options_and_paper
     ws = FastXlsx::Workbook.new.add_worksheet
     assert_raises(ArgumentError) { ws.page_setup(landscpe: true) }
