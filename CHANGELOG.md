@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- Saving is 20-30% faster: files are compressed with zlib-rs instead of the system zlib (which also drops the C zlib dependency). Adding rows is about 15% faster from building with link-time optimisation.
+
 ### Added
 
 - `write`, `write_comment`, `insert_image`, `insert_chart` and `freeze_panes` also take a cell reference such as `"B2"`. `write` is now native, which makes it about 15% faster.

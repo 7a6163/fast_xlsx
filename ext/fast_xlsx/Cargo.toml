@@ -12,7 +12,9 @@ crate-type = ["cdylib"]
 [dependencies]
 magnus = "0.9"
 rb-sys = { version = "0.9", features = ["stable-api-compiled-fallback"] }
-rust_xlsxwriter = { version = "0.99.1", features = ["constant_memory", "zlib"] }
+# No "zlib" feature: without it zip compresses with zlib-rs, which saves
+# 20-30% faster than the system zlib (and needs no C library).
+rust_xlsxwriter = { version = "0.99.1", features = ["constant_memory"] }
 
 [build-dependencies]
 rb-sys-env = "0.2.2"
