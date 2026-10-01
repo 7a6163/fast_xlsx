@@ -479,6 +479,36 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  def test_single_cell_methods_take_an_excel_reference
+    bold = FastXlsx::Format.new(bold: true)
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_same ws, ws.write("B2", 42)
+    ws.write("$c$3", "x", bold)
+    ws.write_comment("B2", "note", author: "Zac")
+    ws.insert_image("D4", StringIO.new(PNG_1X1))
+    ws.insert_chart("F2", type: :line, series: [{ values: "Sheet1!$B$2:$B$3" }])
+    ws.freeze_panes("B2")
+
+    assert_equal [nil, 42, nil], rows(wb)[1]
+    assert_equal "x", rows(wb)[2][2]
+    refute_nil sheet_doc(wb).at("c[r='C3']")["s"] # written with the format
+    assert_equal({ "B2" => %w[Zac note] }, comments(wb))
+    pane = sheet_doc(wb).at("pane")
+    assert_equal %w[1 1], pane.to_h.values_at("xSplit", "ySplit")
+    drawing = Zip::File.open_buffer(StringIO.new(wb.to_xlsx)).read("xl/drawings/drawing1.xml")
+    anchors = Nokogiri::XML(drawing).remove_namespaces!.css("from").map { |f| [f.at("col").text, f.at("row").text] }
+    assert_equal [%w[3 3], %w[5 1]], anchors.sort
+  end
+
+  def test_single_cell_reference_must_be_one_cell
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.write("A1:B2", 1) }
+    assert_match(/single cell/, error.message)
+    assert_raises(ArgumentError) { ws.write("B2") } # value missing
+    assert_raises(ArgumentError) { ws.write(0, 0) }
+  end
+
   def test_invalid_range_references_raise
     ws = FastXlsx::Workbook.new.add_worksheet
     ["A0", "1A", "A1:", "", "A1:B2:C3", "A:A"].each do |ref|

@@ -2,6 +2,7 @@
 
 ### Added
 
+- `write`, `write_comment`, `insert_image`, `insert_chart` and `freeze_panes` also take a cell reference such as `"B2"`. `write` is now native, which makes it about 15% faster.
 - `Worksheet#zoom`, `#tab_color`, `#hide_gridlines`, `#activate`, `#hide`, and `#page_setup` (orientation, paper size, fit to pages, rows/columns repeated on every page, print area, printed gridlines).
 
 ## [0.2.0] - 2026-10-01

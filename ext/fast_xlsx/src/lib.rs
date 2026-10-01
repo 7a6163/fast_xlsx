@@ -939,6 +939,29 @@ impl Worksheet {
         Ok(())
     }
 
+    // Worksheet#write. The (row, col, value, format = nil) form is handled
+    // here rather than in a Ruby wrapper, since it runs once per cell; the
+    // rest ("B2", or a wrong argument count) goes to Ruby's _write_ref.
+    fn write_any(ruby: &Ruby, rb_self: Obj<Self>, args: &[Value]) -> Result<Obj<Self>, Error> {
+        let index = |i: usize| args.get(i).and_then(|v| Integer::from_value(*v));
+        if let (3 | 4, Some(row), Some(col)) = (args.len(), index(0), index(1)) {
+            let format = match args.get(3) {
+                Some(f) => Option::<&Format>::try_convert(*f)?,
+                None => None,
+            };
+            Self::write(
+                ruby,
+                &rb_self,
+                row.to_u32()?,
+                col.to_u16()?,
+                args[2],
+                format,
+            )?;
+            return Ok(rb_self);
+        }
+        rb_self.funcall("_write_ref", args)
+    }
+
     fn write(
         ruby: &Ruby,
         rb_self: &Self,
@@ -1713,6 +1736,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
 
     let ws = module.define_class("Worksheet", ruby.class_object())?;
     ws.define_method("_write", method!(Worksheet::write, 4))?;
+    ws.define_method("write", method!(Worksheet::write_any, -1))?;
     ws.define_method("_append", method!(Worksheet::append, 2))?;
     ws.define_method("_column_width", method!(Worksheet::set_column_width, 3))?;
     ws.define_method("_column_format", method!(Worksheet::set_column_format, 3))?;
@@ -1728,7 +1752,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         method!(Worksheet::conditional_format, 5),
     )?;
     ws.define_method("_data_validation", method!(Worksheet::data_validation, 5))?;
-    ws.define_method("freeze_panes", method!(Worksheet::freeze_panes, 2))?;
+    ws.define_method("_freeze_panes", method!(Worksheet::freeze_panes, 2))?;
     ws.define_method("row_height", method!(Worksheet::set_row_height, 2))?;
     ws.define_method("page_breaks", method!(Worksheet::set_page_breaks, 1))?;
     ws.define_method("_page_header", method!(Worksheet::set_header, 1))?;

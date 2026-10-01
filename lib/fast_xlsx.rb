@@ -102,10 +102,15 @@ module FastXlsx
 
   # Cell writer for one sheet; create with Workbook#add_worksheet.
   class Worksheet
-    def write(row, col, value, format = nil)
+    # write(row, col, value, format = nil) or write("B2", value, format = nil)
+    # is native: the (row, col) form runs once per cell, so it skips a Ruby
+    # wrapper. Other forms come here.
+    def _write_ref(*args)
+      row, col, (value, format) = CellRange.cell(args, 1..2)
       _write(row, col, value, format)
       self
     end
+    private :_write_ref
 
     def append(values, format: nil)
       _append(values, format)
@@ -158,14 +163,16 @@ module FastXlsx
     end
 
     # Adds a comment (Excel "note") to a cell.
-    def write_comment(row, col, text, author: nil)
+    def write_comment(*args, author: nil)
+      row, col, (text, *) = CellRange.cell(args, 1..1)
       _write_comment(row, col, text, author)
     end
 
     # Inserts a PNG, JPEG, GIF or BMP image with its top-left corner in the
     # cell. source is a file path or an IO (anything responding to #read).
     # Options: scale: or width:/height: (pixels), x_offset:, y_offset: (pixels), alt_text:.
-    def insert_image(row, col, source, **)
+    def insert_image(*args, **)
+      row, col, (source, *) = CellRange.cell(args, 1..1)
       bytes = source.respond_to?(:read) ? source.read : File.binread(source)
       _insert_image(row, col, bytes, { ** })
     end
@@ -173,7 +180,8 @@ module FastXlsx
     # Inserts a chart with its top-left corner in the cell. series is an Array
     # of { values:, categories:, name: } with Excel ranges such as
     # "Sheet1!$B$2:$B$13". Options: title:, x_axis:, y_axis:, width:, height:.
-    def insert_chart(row, col, type:, series:, **)
+    def insert_chart(*cell, type:, series:, **)
+      row, col, = CellRange.cell(cell)
       _insert_chart(row, col, { type: type, series: series, ** })
     end
 
@@ -226,6 +234,13 @@ module FastXlsx
       _group_columns(*CellRange.bounds(columns), collapsed)
     end
 
+    # Keeps the rows above and the columns left of the cell visible while
+    # scrolling: (1, 0) or "A2" freezes the first row.
+    def freeze_panes(*cell)
+      _freeze_panes(*CellRange.cell(cell).first(2))
+      self
+    end
+
     # Locks the sheet against editing. Cells whose format has locked: false
     # stay editable. allow: actions users may still take, any of :format_cells,
     # :format_columns, :format_rows, :insert_columns, :insert_rows,
@@ -248,6 +263,7 @@ module FastXlsx
   module CellRange
     REF = /\A\$?([A-Za-z]{1,3})\$?([1-9]\d*)\z/ # ASCII only: /i also matches the Kelvin sign
     FORMS = 'a range is (first_row, first_col, last_row, last_col), "A1:D10" or (rows, cols)'
+    CELL_FORMS = 'a cell is (row, col) or "B2"'
 
     module_function
 
@@ -255,12 +271,7 @@ module FastXlsx
     # Returns [[first_row, first_col, last_row, last_col], the args after it].
     def split(args, following = 0..0)
       range, rest = parse(args)
-      unless following.cover?(rest.size)
-        expected = following.minmax.uniq.join("..")
-        raise ArgumentError, "wrong number of arguments after the cell range (given #{rest.size}, " \
-                             "expected #{expected}); #{FORMS}"
-      end
-
+      check_following(rest, following, "cell range", FORMS)
       [range, rest]
     end
 
@@ -273,6 +284,30 @@ module FastXlsx
       else
         raise ArgumentError, "expected a cell range, got #{args.inspect}; #{FORMS}"
       end
+    end
+
+    # (row, col) or a single-cell reference ("B2") off the front of args, as
+    # [row, col, the args after it].
+    def cell(args, following = 0..0)
+      row, col, *rest = args.first.is_a?(String) ? [*single_cell(args.first), *args.drop(1)] : args
+      raise ArgumentError, "expected a cell, got #{args.inspect}; #{CELL_FORMS}" if col.nil?
+
+      check_following(rest, following, "cell", CELL_FORMS)
+      [row, col, rest]
+    end
+
+    def single_cell(ref)
+      first_row, first_col, last_row, last_col = excel(ref)
+      return [first_row, first_col] if first_row == last_row && first_col == last_col
+
+      raise ArgumentError, "expected a single cell like \"B2\", got #{ref.inspect}"
+    end
+
+    def check_following(rest, following, what, forms)
+      return if following.cover?(rest.size)
+
+      raise ArgumentError, "wrong number of arguments after the #{what} " \
+                           "(given #{rest.size}, expected #{following.minmax.uniq.join("..")}); #{forms}"
     end
 
     def rows_and_cols(rows, cols)

@@ -18,6 +18,7 @@ ws = wb.add_worksheet("Report")                  # later: wb.worksheet("Report")
 ws << ["id", "name", "created_at"]                # append a row
 ws.concat(records.map { |r| [r.id, r.name, r.created_at] })  # append many rows in one call
 ws.write(0, 5, 42)                                # write a single cell (row, col, value)
+ws.write("F1", 42)                                # or by its Excel reference
 
 wb.properties(title: "Q3 report", author: "Zac", keywords: "Confidential") # File > Info in Excel
 wb.save("report.xlsx")                            # or wb.to_xlsx => binary String
@@ -117,6 +118,8 @@ ws.autofilter("A1:D101")      # an Excel reference; "$A$1:$D$101" and a single "
 ws.autofilter(0..100, 0..3)   # rows and columns, each an Integer or a Range
 ws.merge_range(0, 0..3, "Q3 report", title) # row 1, columns A–D
 ```
+
+Methods that take one cell (`write`, `write_comment`, `insert_image`, `insert_chart`, `freeze_panes`) take `(row, col)` or a reference like `"B2"`.
 
 `autofit` only sees rows still in memory, so in `:constant` / `:low` memory mode it ignores rows already written to disk; set widths with `column_width` instead.
 

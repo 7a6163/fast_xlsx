@@ -57,6 +57,7 @@ module FastXlsx
 
   class Worksheet
     def write: (Integer row, Integer col, cell value, ?Format? format) -> self
+             | (String cell, cell value, ?Format? format) -> self
     def append: (Array[cell] values, ?format: Format? | Array[Format?]) -> self
     def <<: (Array[cell] row) -> self
     def concat: (Array[Array[cell]] rows) -> self
@@ -72,6 +73,7 @@ module FastXlsx
                   | (String range) -> self
                   | (indexes rows, indexes cols) -> self
     def freeze_panes: (Integer row, Integer col) -> self
+                    | (String cell) -> self
     def row_height: (Integer row, Numeric height) -> self
     def page_breaks: (Array[Integer] rows) -> self
     def vertical_page_breaks: (Array[Integer] cols) -> self
@@ -106,11 +108,17 @@ module FastXlsx
                           ?input_title: String, ?input_message: String,
                           ?error_title: String, ?error_message: String) -> self
     def write_comment: (Integer row, Integer col, String text, ?author: String?) -> self
+                     | (String cell, String text, ?author: String?) -> self
     def insert_image: (Integer row, Integer col, String | _Reader source, ?scale: Numeric, ?width: Numeric, ?height: Numeric,
+                       ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
+                    | (String cell, String | _Reader source, ?scale: Numeric, ?width: Numeric, ?height: Numeric,
                        ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
     type chart_series = { values: String, ?categories: String, ?name: String }
 
     def insert_chart: (Integer row, Integer col, type: Symbol, series: Array[chart_series],
+                       ?title: String, ?x_axis: String, ?y_axis: String,
+                       ?width: Integer, ?height: Integer) -> self
+                    | (String cell, type: Symbol, series: Array[chart_series],
                        ?title: String, ?x_axis: String, ?y_axis: String,
                        ?width: Integer, ?height: Integer) -> self
     type table_column = String | { header: String, ?total: Symbol, ?total_label: String, ?format: Format }
