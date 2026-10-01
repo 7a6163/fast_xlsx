@@ -113,11 +113,11 @@ module FastXlsx
 
     # columns: a 0-based column index or a Range of them. width is in characters.
     def column_width(columns, width)
-      bounds = column_bounds(columns)
-      _column_width(*bounds, width)
+      range = bounds(columns)
+      _column_width(*range, width)
       @fixed_widths ||= {}
-      @fixed_widths.delete(bounds) # re-insert so autofit replays calls in order
-      @fixed_widths[bounds] = width
+      @fixed_widths.delete(range) # re-insert so autofit replays calls in order
+      @fixed_widths[range] = width
       self
     end
 
@@ -192,6 +192,17 @@ module FastXlsx
       self
     end
 
+    # Outline group with an expand/collapse button. rows: a 0-based row index
+    # or a Range; grouping rows already grouped nests them (up to 7 levels).
+    # collapsed: true hides them until expanded.
+    def group_rows(rows, collapsed: false)
+      _group_rows(*bounds(rows), collapsed)
+    end
+
+    def group_columns(columns, collapsed: false)
+      _group_columns(*bounds(columns), collapsed)
+    end
+
     # Locks the sheet against editing. Cells whose format has locked: false
     # stay editable. allow: actions users may still take, any of :format_cells,
     # :format_columns, :format_rows, :insert_columns, :insert_rows,
@@ -203,14 +214,15 @@ module FastXlsx
 
     # Default format for cells in these columns that are written without one.
     def column_format(columns, format)
-      _column_format(*column_bounds(columns), format)
+      _column_format(*bounds(columns), format)
       self
     end
 
     private
 
-    def column_bounds(columns)
-      columns.is_a?(Integer) ? [columns, columns] : columns.minmax
+    # [first, last] of an index or a Range.
+    def bounds(indexes)
+      indexes.is_a?(Integer) ? [indexes, indexes] : indexes.minmax
     end
   end
 

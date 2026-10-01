@@ -106,6 +106,16 @@ ws.page_footer("&L&A", margin: 0.2)             # sheet name on the left; margin
 ws.margins(left: 0.5, top: 1)              # other margins keep Excel's defaults
 ```
 
+### Outline groups
+
+```ruby
+ws.group_rows(1..10)                     # rows 2–11 get an expand/collapse button
+ws.group_rows(1..4)                      # grouping again nests them (up to 7 levels)
+ws.group_columns(2..3, collapsed: true)  # columns C–D, collapsed until expanded
+```
+
+`group_rows` needs `memory: :standard`: in `:constant` / `:low` mode rust_xlsxwriter writes rows without their outline level, so it raises. `group_columns` works in every mode.
+
 ### Protection
 
 ```ruby

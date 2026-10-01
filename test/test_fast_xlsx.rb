@@ -361,6 +361,51 @@ class TestFastXlsx < Minitest::Test
     assert_equal [true, false], cell_style(wb, "C1").values_at(:locked, :hidden)
   end
 
+  # Row number => [outlineLevel, hidden] for rows in sheet 1.
+  def row_outlines(workbook)
+    Nokogiri::XML(sheet_xml(workbook)).remove_namespaces!.css("sheetData row")
+            .to_h { |row| [row["r"].to_i, [row["outlineLevel"], row["hidden"]]] }
+  end
+
+  def test_group_rows_nests_and_collapses
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.concat([[1], [2], [3], [4]])
+
+    assert_same ws, ws.group_rows(1..2)
+    ws.group_rows(2, collapsed: true)
+
+    assert_equal({ 1 => [nil, nil], 2 => ["1", nil], 3 => %w[2 1], 4 => [nil, nil] }, row_outlines(wb))
+  end
+
+  def test_group_columns_collapses
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws << [1, 2, 3, 4]
+
+    assert_same ws, ws.group_columns(1..2, collapsed: true)
+    cols = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.css("cols col")
+    assert_includes cols.map { |c| c.to_h.values_at("min", "max", "outlineLevel", "hidden") }, %w[2 3 1 1]
+  end
+
+  # rust_xlsxwriter writes no outline levels for rows in these modes.
+  def test_group_rows_raises_in_constant_and_low_memory_mode
+    %i[constant low].each do |memory|
+      ws = FastXlsx::Workbook.new(memory: memory).add_worksheet
+      error = assert_raises(FastXlsx::Error) { ws.group_rows(1..2) }
+      assert_match(/:standard/, error.message)
+    end
+  end
+
+  def test_group_columns_works_in_constant_memory_mode
+    wb = FastXlsx::Workbook.new(memory: :constant)
+    ws = wb.add_worksheet
+    ws.group_columns(1)
+    ws << [0, 1]
+
+    assert_equal "1", Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.at("cols col[min='2']")["outlineLevel"]
+  end
+
   def test_freeze_panes_freezes_rows_above_and_columns_left
     wb = FastXlsx::Workbook.new
     wb.add_worksheet.freeze_panes(1, 2)

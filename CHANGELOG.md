@@ -2,6 +2,7 @@
 
 ### Added
 
+- `Worksheet#group_rows` and `#group_columns` (outline groups, optionally collapsed); `group_rows` raises in `:constant` / `:low` mode.
 - `Worksheet#protect(password:, allow:)` locks a sheet; `Format` options `locked: false` and `hidden: true` keep cells editable or hide formulas.
 
 ## [0.1.2] - 2026-09-30

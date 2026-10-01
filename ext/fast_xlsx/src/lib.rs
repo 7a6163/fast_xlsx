@@ -1477,6 +1477,51 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn group_rows(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        first: u32,
+        last: u32,
+        collapsed: bool,
+    ) -> Result<Obj<Self>, Error> {
+        // rust_xlsxwriter writes no outline levels when it writes rows to
+        // disk as it goes.
+        if rb_self.flushes_rows {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                "group_rows needs memory: :standard (rows written to disk as they go lose their outline level)",
+            ));
+        }
+        rb_self.with_ws(|ws| {
+            if collapsed {
+                ws.group_rows_collapsed(first, last)
+            } else {
+                ws.group_rows(first, last)
+            }
+            .map(|_| ())
+            .map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
+    fn group_columns(
+        rb_self: Obj<Self>,
+        first: u16,
+        last: u16,
+        collapsed: bool,
+    ) -> Result<Obj<Self>, Error> {
+        rb_self.with_ws(|ws| {
+            if collapsed {
+                ws.group_columns_collapsed(first, last)
+            } else {
+                ws.group_columns(first, last)
+            }
+            .map(|_| ())
+            .map_err(xerr)
+        })?;
+        Ok(rb_self)
+    }
+
     fn protect(
         ruby: &Ruby,
         rb_self: Obj<Self>,
@@ -1545,6 +1590,8 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "vertical_page_breaks",
         method!(Worksheet::set_vertical_page_breaks, 1),
     )?;
+    ws.define_method("_group_rows", method!(Worksheet::group_rows, 3))?;
+    ws.define_method("_group_columns", method!(Worksheet::group_columns, 3))?;
     ws.define_method("_protect", method!(Worksheet::protect, 2))?;
     ws.define_method("_merge_range", method!(Worksheet::merge_range, 6))?;
 
