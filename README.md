@@ -291,13 +291,17 @@ All outputs are 681–750 KB.
 
 | Library | Unique strings | Repeated strings |
 |---|---:|---:|
-| **fast_xlsx** (`memory: :constant`) | **+2 MB** | **+2 MB** |
-| **fast_xlsx** (`memory: :low`) | +62 MB | **+2 MB** |
-| **fast_xlsx** | +270 MB | +217 MB |
-| fast_excel 0.5 (constant_memory) | +10 MB | +10 MB |
-| fast_excel 0.5 | +183 MB | +151 MB |
+| **fast_xlsx** (`memory: :constant`) | **+1 MB** | **+1 MB** |
+| **fast_xlsx** (`memory: :low`) | +61 MB | **+1 MB** |
+| **fast_xlsx** | +271 MB | +217 MB |
+| fast_excel 0.5 (constant_memory) | +10 MB | +9 MB |
+| fast_excel 0.5 | +182 MB | +151 MB |
 
 The `:standard` mode uses more memory than fast_excel's: when saving, rust_xlsxwriter assembles each worksheet's XML in memory (so several worksheets can be built in parallel) instead of streaming it from a temp file. Use `memory: :constant` or `memory: :low` for large exports.
+
+### Threads
+
+Most of the time goes into saving (building the XML and compressing it). `to_xlsx` and `save` do that without holding Ruby's global lock, so in a threaded server (Puma, Sidekiq) other threads keep running while a large export is saved.
 
 ### Reproduce
 
