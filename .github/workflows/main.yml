@@ -36,6 +36,33 @@ jobs:
       - name: Run the default task
         run: bundle exec rake
 
+checks:
+  runs-on: ubuntu-latest
+  name: Types, lints and advisories
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+    - name: Set up Ruby & Rust
+      uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+      with:
+        ruby-version: '4.0.5'
+        bundler-cache: true
+        cargo-cache: true
+        rubygems: '4.0.10'
+        rustup-components: clippy
+    - name: Check the RBS signatures
+      run: bundle exec rbs -r date -I sig validate
+    - name: Clippy
+      run: cargo clippy --manifest-path ext/fast_xlsx/Cargo.toml --all-targets -- -D warnings
+    - uses: taiki-e/install-action@cargo-audit
+    - name: Audit Rust dependencies
+      run: cargo audit
+    - name: Audit Ruby dependencies
+      run: |
+        gem install bundler-audit --no-document
+        bundle-audit check --update
+
   coverage:
     runs-on: ubuntu-latest
     name: Coverage
