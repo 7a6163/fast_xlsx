@@ -1,17 +1,20 @@
 # frozen_string_literal: true
 
-# Set by ext/fast_xlsx/tests/ruby_suite.rs for mutation testing. A mutant can
-# loop forever inside the extension, where Ruby can't interrupt it, and this
-# process outlives cargo-mutants' timeout; a CPU limit lets the kernel stop it.
-if (cpu_seconds = ENV.fetch("FAST_XLSX_TEST_CPU_SECONDS", nil))
-  hard = Process.getrlimit(:CPU)[1] # keep it: lowering only the soft limit can't fail
-  Process.setrlimit(:CPU, [Integer(cpu_seconds), hard].min, hard)
-end
-
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "fast_xlsx"
 
 require "minitest/autorun"
+
+# Set by ext/fast_xlsx/tests/ruby_suite.rs for mutation testing. A mutant can
+# hang inside the extension (looping, or deadlocked), where Ruby can't
+# interrupt it, and this process outlives cargo-mutants' own timeout. A
+# separate process kills it after that many seconds unless the tests finish.
+if (seconds = ENV.fetch("FAST_XLSX_TEST_TIMEOUT_SECONDS", nil))
+  watchdog = Process.spawn("sleep #{Integer(seconds)}; kill -9 #{Process.pid}", pgroup: true)
+  Process.detach(watchdog)
+  Minitest.after_run { Process.kill(:TERM, -watchdog) } # its sleep too
+end
+
 require "roo"
 require "stringio"
 require "tempfile"
