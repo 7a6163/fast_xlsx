@@ -155,6 +155,24 @@ class TestFastXlsx < Minitest::Test
     assert_equal [["z"]], rows(wb)
   end
 
+  def test_time_keeps_its_fraction_of_a_second
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [Time.utc(2000, 1, 1, 12, 0, Rational(3, 4))]
+
+    assert_in_delta 36_526.5 + (0.75 / 86_400), serials(wb).first, 1e-9
+  end
+
+  # Only something with both utc_offset and to_f is taken for a time.
+  def test_an_object_with_to_f_alone_is_written_as_text
+    measure = Object.new
+    def measure.to_f = 2.5
+    def measure.to_s = "2.5 kg"
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [measure]
+
+    assert_equal [["2.5 kg"]], rows(wb)
+  end
+
   def test_time_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Time.utc(2000, 1, 1, 12)]
