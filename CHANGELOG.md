@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Fixed
+
+- Rails' `ActiveSupport::TimeWithZone` (e.g. `created_at`) and other objects that act like a `Time` without being one were written as text; they are dates now.
+
+### Changed
+
+- Writing `Time` values is about 30% faster (read through Ruby's C API instead of method calls), and `Date` values a little faster.
+
 ## [0.8.0] - 2026-10-02
 
 ### Changed

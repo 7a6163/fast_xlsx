@@ -370,7 +370,7 @@ Values are mapped by type:
 |---|---|
 | `Integer`, `Float`, any `Numeric` | number |
 | `String` | string |
-| `Time`, `DateTime` | date and time (`yyyy-mm-dd hh:mm:ss` unless formatted), in its own offset |
+| `Time`, `DateTime`, time-like objects such as Rails' `ActiveSupport::TimeWithZone` | date and time (`yyyy-mm-dd hh:mm:ss` unless formatted), in its own offset |
 | `Date` | date (`yyyy-mm-dd` unless formatted) |
 | `FastXlsx::Formula.new("SUM(A1:A9)")` | formula |
 | `FastXlsx::URL.new("https://…")`, `URL.new(url, text: "Title")` | hyperlink (optionally showing other text) |

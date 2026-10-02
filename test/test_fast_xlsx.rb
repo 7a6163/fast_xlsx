@@ -128,6 +128,17 @@ class TestFastXlsx < Minitest::Test
     end
   end
 
+  # Rails' ActiveSupport::TimeWithZone isn't a Time subclass at the C level; it
+  # delegates to one, as a SimpleDelegator does.
+  def test_time_like_objects_are_written_as_dates
+    require "delegate"
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet << [SimpleDelegator.new(Time.new(2000, 1, 1, 18, 0, 0, "+08:00"))]
+
+    assert_equal [36_526.75], serials(wb) # 18:00 in its own offset
+    assert_equal "yyyy-mm-dd hh:mm:ss", open_xlsx(wb).excelx_format(1, 1)
+  end
+
   def test_time_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Time.utc(2000, 1, 1, 12)]

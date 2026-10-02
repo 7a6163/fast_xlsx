@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-magnus = "0.9"
+magnus = { version = "0.9", features = ["rb-sys"] }
 rb-sys = { version = "0.9", features = ["stable-api-compiled-fallback"] }
 # No "zlib" feature: without it zip compresses with zlib-rs, which saves
 # 20-30% faster than the system zlib (and needs no C library).

@@ -328,7 +328,24 @@ fn excel_serial(days: f64) -> Result<f64, Error> {
 }
 
 // Time: seconds since 1970-01-01 (serial day 25569), in its own offset.
+// For a Time (checked by the caller): Ruby's C functions, with no method calls,
+// since this runs once per cell.
 fn excel_time(v: Value) -> Result<f64, Error> {
+    use magnus::rb_sys::{AsRawValue, FromRawValue};
+    // SAFETY: v is a Time, for which neither function raises.
+    let (spec, offset) = unsafe {
+        (
+            rb_sys::rb_time_timespec(v.as_raw()),
+            Value::from_raw(rb_sys::rb_time_utc_offset(v.as_raw())),
+        )
+    };
+    let secs = spec.tv_sec as f64 + spec.tv_nsec as f64 / 1e9;
+    excel_serial((secs + i64::try_convert(offset)? as f64) / 86400.0 + 25569.0)
+}
+
+// Something that acts like a Time without being one at the C level, such as
+// Rails' ActiveSupport::TimeWithZone (it delegates to a Time).
+fn excel_time_like(v: Value) -> Result<f64, Error> {
     let secs: f64 = v.funcall("to_f", ())?;
     let offset: i64 = v.funcall("utc_offset", ())?;
     excel_serial((secs + offset as f64) / 86400.0 + 25569.0)
@@ -336,9 +353,14 @@ fn excel_time(v: Value) -> Result<f64, Error> {
 
 // Date / DateTime: Julian day and day fraction are both in the object's own
 // offset. JD 2415019 is 1899-12-30.
-fn excel_date(v: Value) -> Result<f64, Error> {
+// `time`: a DateTime, with a time of day; a Date's day fraction is always 0.
+fn excel_date(v: Value, time: bool) -> Result<f64, Error> {
     let jd: i64 = v.funcall("jd", ())?;
-    let fraction: f64 = f64::try_convert(v.funcall("day_fraction", ())?)?;
+    let fraction = if time {
+        f64::try_convert(v.funcall("day_fraction", ())?)?
+    } else {
+        0.0
+    };
     excel_serial((jd - 2_415_019) as f64 + fraction)
 }
 
@@ -413,7 +435,10 @@ impl CellValue {
             CellValue::Rich(parts)
         } else if v.respond_to("jd", false)? {
             // Date has no #hour; DateTime does.
-            CellValue::Date(excel_date(v)?, v.respond_to("hour", false)?)
+            let time = v.respond_to("hour", false)?;
+            CellValue::Date(excel_date(v, time)?, time)
+        } else if v.respond_to("utc_offset", false)? && v.respond_to("to_f", false)? {
+            CellValue::Date(excel_time_like(v)?, true)
         } else {
             CellValue::Text(v.funcall("to_s", ())?)
         };
