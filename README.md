@@ -19,6 +19,8 @@ bundle add fast_xlsx
 
 Requires CRuby 3.3 or later. Precompiled gems cover Linux, macOS and Windows; see [Support and versioning](#support-and-versioning).
 
+Coming from fast_excel? See [Migrating from fast_excel](docs/MIGRATING_FROM_FAST_EXCEL.md).
+
 ## Getting started
 
 A sales report, step by step: a header, one row per sale, a totals row, then sized columns, a frozen header and filter buttons.
