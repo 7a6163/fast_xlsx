@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-03
+
 ### Fixed
 
 - Rails' `ActiveSupport::TimeWithZone` (e.g. `created_at`) and other objects that act like a `Time` without being one were written as text; they are dates now.
