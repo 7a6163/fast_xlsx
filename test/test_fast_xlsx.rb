@@ -139,6 +139,22 @@ class TestFastXlsx < Minitest::Test
     assert_equal "yyyy-mm-dd hh:mm:ss", open_xlsx(wb).excelx_format(1, 1)
   end
 
+  # Reading a Time can raise in Ruby (out of range, uninitialized, a zone
+  # object's Ruby code); that must surface as an exception, row unwritten.
+  def test_times_ruby_cannot_read_raise_cleanly
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_raises(ArgumentError, RangeError) { ws << ["a", Time.at(2**64)] }
+    assert_raises(TypeError) { ws << ["b", Time.allocate] }
+    zone = Object.new
+    def zone.utc_to_local(_) = raise(IOError, "zone lookup failed")
+    def zone.local_to_utc(time) = time
+    assert_raises(IOError) { ws << ["c", Time.at(0, in: zone) + 1] }
+    ws << ["z"]
+
+    assert_equal [["z"]], rows(wb)
+  end
+
   def test_time_is_written_as_excel_serial_number
     wb = FastXlsx::Workbook.new
     wb.add_worksheet << [Time.utc(2000, 1, 1, 12)]

@@ -6,7 +6,7 @@
 
 ### Changed
 
-- Writing `Time` values is about 30% faster (read through Ruby's C API instead of method calls), and `Date` values a little faster.
+- Writing `Time` values is about 25% faster (read through Ruby's C API instead of method calls), and `Date` values a little faster.
 
 ## [0.8.0] - 2026-10-02
 

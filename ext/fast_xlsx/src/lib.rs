@@ -331,14 +331,19 @@ fn excel_serial(days: f64) -> Result<f64, Error> {
 // For a Time (checked by the caller): Ruby's C functions, with no method calls,
 // since this runs once per cell.
 fn excel_time(v: Value) -> Result<f64, Error> {
-    use magnus::rb_sys::{AsRawValue, FromRawValue};
-    // SAFETY: v is a Time, for which neither function raises.
-    let (spec, offset) = unsafe {
-        (
-            rb_sys::rb_time_timespec(v.as_raw()),
-            Value::from_raw(rb_sys::rb_time_utc_offset(v.as_raw())),
-        )
-    };
+    use magnus::rb_sys::{protect, AsRawValue, FromRawValue};
+    // Both can raise (a Time out of range or uninitialized, or a zone object
+    // whose Ruby code fails), so they run under protect: a raise becomes an
+    // Err instead of a longjmp over these Rust frames.
+    let mut spec = None;
+    protect(|| {
+        // SAFETY: protect catches anything this raises.
+        spec = Some(unsafe { rb_sys::rb_time_timespec(v.as_raw()) });
+        rb_sys::Qnil as rb_sys::VALUE
+    })?;
+    // SAFETY: as above.
+    let offset = protect(|| unsafe { rb_sys::rb_time_utc_offset(v.as_raw()) })?;
+    let (spec, offset) = (spec.unwrap(), unsafe { Value::from_raw(offset) });
     let secs = spec.tv_sec as f64 + spec.tv_nsec as f64 / 1e9;
     excel_serial((secs + i64::try_convert(offset)? as f64) / 86400.0 + 25569.0)
 }
