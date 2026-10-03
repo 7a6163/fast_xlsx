@@ -402,15 +402,15 @@ Apple Silicon, Ruby 4.0.5. Each library uses its own idiomatic row-append API; x
 
 | Library | Time | vs fastest | Ruby objects allocated |
 |---|---:|---:|---:|
-| **fast_xlsx** (`memory: :constant`) | **77 ms** | 1.0x | 7 |
-| **fast_xlsx** (`memory: :low`) | **86 ms** | 1.1x | 7 |
-| **fast_xlsx** | **89 ms** | 1.1x | 10 |
-| [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 183 ms | 2.4x | 561,728 |
-| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 200 ms | 2.6x | 20,079 |
-| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 | 238 ms | 3.1x | 320,076 |
-| [write_xlsx](https://github.com/cxn03651/write_xlsx) 1.15 | 608 ms | 7.8x | 1,483,899 |
-| [caxlsx](https://github.com/caxlsx/caxlsx) 4.5 | 689 ms | 8.9x | 745,122 |
-| [rubyXL](https://github.com/weshatheleopard/rubyXL) 3.4 | 2755 ms | 35.6x | 8,700,448 |
+| **fast_xlsx** (`memory: :constant`) | **75 ms** | 1.0x | 7 |
+| **fast_xlsx** (`memory: :low`) | **81 ms** | 1.1x | 7 |
+| **fast_xlsx** | **85 ms** | 1.1x | 10 |
+| [xlsxtream](https://github.com/felixbuenemann/xlsxtream) 3.1 | 173 ms | 2.3x | 561,740 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 (constant_memory) | 204 ms | 2.7x | 20,079 |
+| [fast_excel](https://github.com/Paxa/fast_excel) 0.5 | 238 ms | 3.2x | 320,076 |
+| [write_xlsx](https://github.com/cxn03651/write_xlsx) 1.15 | 592 ms | 7.9x | 1,483,899 |
+| [caxlsx](https://github.com/caxlsx/caxlsx) 4.5 | 671 ms | 8.9x | 745,122 |
+| [rubyXL](https://github.com/weshatheleopard/rubyXL) 3.4 | 2571 ms | 34.1x | 8,700,448 |
 
 All outputs are 689–750 KB.
 

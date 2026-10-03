@@ -4,7 +4,7 @@ fast_xlsx started as a rewrite of [fast_excel](https://github.com/Paxa/fast_exce
 
 **Why switch**
 
-- 2.8–3.3× faster on the [README benchmark](../README.md#speed), and `memory: :constant` adds about 1 MB however large the file.
+- 2.7–3.2× faster on the [README benchmark](../README.md#speed), and `memory: :constant` adds about 1 MB however large the file.
 - Precompiled gems for Linux, macOS and Windows: no C compiler or FFI at install.
 - Dates show as dates without a format, every option is checked (a typo raises instead of being ignored), and saving doesn't block other threads.
 - Conditional formats, data validation, tables, charts, images, comments, protection and printing options as Ruby methods.
