@@ -1,5 +1,7 @@
 # FastXlsx
 
+![fast_xlsx: fast .xlsx writer for Ruby, powered by Rust](docs/social-preview.jpg)
+
 [![Gem Version](https://badge.fury.io/rb/fast_xlsx.svg)](https://badge.fury.io/rb/fast_xlsx)
 [![codecov](https://codecov.io/gh/7a6163/fast_xlsx/graph/badge.svg)](https://codecov.io/gh/7a6163/fast_xlsx)
 
