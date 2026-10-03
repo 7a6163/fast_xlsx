@@ -3,13 +3,13 @@
 [![Gem Version](https://badge.fury.io/rb/fast_xlsx.svg)](https://badge.fury.io/rb/fast_xlsx)
 [![codecov](https://codecov.io/gh/7a6163/fast_xlsx/graph/badge.svg)](https://codecov.io/gh/7a6163/fast_xlsx)
 
-Fast `.xlsx` writer for Ruby, built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
+Fast Excel (`.xlsx`) writer for Ruby, powered by Rust: 20,000 rows in under 100 ms, with memory that stays flat for large exports. Built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
 
 > **Status: release candidate.** The API is frozen as of 0.8: 0.8.x releases only fix bugs, and 1.0 follows once it has been in real use without needing changes.
 
 **Roadmap:** [1.0.0](https://github.com/7a6163/fast_xlsx/milestone/1) (release plan) · [1.x](https://github.com/7a6163/fast_xlsx/milestone/2) (planned features)
 
-**Contents:** [Installation](#installation) · [Getting started](#getting-started) · [Guide](#guide) · [Performance](#performance) · [Support and versioning](#support-and-versioning) · [Development](#development)
+**Contents:** [Installation](#installation) · [Getting started](#getting-started) · [Guide](#guide) · [Performance](#performance) · [Support and versioning](#support-and-versioning) · [Development](#development) · [Credits](#credits)
 
 ## Installation
 
@@ -497,6 +497,10 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 The `Build gems` workflow builds the source gem plus precompiled gems for each platform and pushes them to RubyGems (trusted publishing) and GitHub Packages. It refuses to publish if the tag and `VERSION` differ.
+
+## Credits
+
+Inspired by [fast_excel](https://github.com/Paxa/fast_excel), whose API and approach fast_xlsx builds on, and made possible by [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) and [magnus](https://github.com/matsadler/magnus).
 
 ## License
 

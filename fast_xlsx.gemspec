@@ -8,8 +8,10 @@ Gem::Specification.new do |spec|
   spec.authors = ["Zac"]
   spec.email = ["579103+7a6163@users.noreply.github.com"]
 
-  spec.summary = "Fast xlsx writer for Ruby, powered by rust_xlsxwriter"
-  spec.description = "Writes Excel .xlsx files from Ruby through a native Rust extension (rust_xlsxwriter + magnus)."
+  spec.summary = "Fast Excel .xlsx writer for Ruby, powered by Rust"
+  spec.description = "Writes Excel .xlsx files from Ruby through a native Rust extension (rust_xlsxwriter): " \
+                     "20,000 rows in under 100 ms, and memory that stays flat for large exports. Formats, " \
+                     "formulas, tables, charts, conditional formats, data validation and more."
   spec.homepage = "https://github.com/7a6163/fast_xlsx"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.3.0"
