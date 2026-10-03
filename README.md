@@ -2,7 +2,7 @@
 
 ![fast_xlsx: fast .xlsx writer for Ruby, powered by Rust](docs/social-preview.jpg)
 
-[![Gem Version](https://badge.fury.io/rb/fast_xlsx.svg)](https://badge.fury.io/rb/fast_xlsx)
+[![Gem Version](https://img.shields.io/gem/v/fast_xlsx)](https://rubygems.org/gems/fast_xlsx)
 [![codecov](https://codecov.io/gh/7a6163/fast_xlsx/graph/badge.svg)](https://codecov.io/gh/7a6163/fast_xlsx)
 
 Fast Excel (`.xlsx`) writer for Ruby, powered by Rust: 20,000 rows in under 100 ms, with memory that stays flat for large exports. Built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
