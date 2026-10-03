@@ -81,6 +81,7 @@ jobs:
       matrix:
         target:
           - { os: ubuntu-latest, platform: x86_64-linux }
+          - { os: ubuntu-24.04-arm, platform: aarch64-linux }
           - { os: macos-latest, platform: arm64-darwin }
           - { os: windows-latest, platform: x64-mingw-ucrt }
         ruby: ["3.3", "3.4", "4.0"]
@@ -106,10 +107,50 @@ jobs:
             puts "fast_xlsx #{FastXlsx::VERSION} OK on #{RUBY_PLATFORM}, Ruby #{RUBY_VERSION}"
           '
 
+  # The musl gems, in the official Alpine Ruby images (as Alpine-based Docker
+  # deployments use them). docker run rather than a job container: JavaScript
+  # actions don't run in Alpine containers. 32-bit ARM runs under QEMU, so it
+  # is tried on one Ruby only. (x86_64-darwin has no GitHub runner left.)
+  smoke-test-musl:
+    name: Install ${{ matrix.target.platform }} gem on Ruby ${{ matrix.ruby }} (Alpine)
+    needs: cross-gem
+    runs-on: ${{ matrix.target.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { os: ubuntu-latest, platform: x86_64-linux-musl, docker: linux/amd64 }
+          - { os: ubuntu-24.04-arm, platform: aarch64-linux-musl, docker: linux/arm64 }
+        ruby: ["3.3", "3.4", "4.0"]
+        include:
+          - target: { os: ubuntu-latest, platform: arm-linux-musl, docker: linux/arm/v7, qemu: true }
+            ruby: "3.4"
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: gem-${{ matrix.target.platform }}
+          path: pkg
+
+      - if: matrix.target.qemu
+        uses: docker/setup-qemu-action@v3
+
+      - name: Install and use the gem
+        run: |
+          docker run --rm --platform ${{ matrix.target.docker }} -v "$PWD/pkg:/pkg" ruby:${{ matrix.ruby }}-alpine sh -c '
+            gem install /pkg/*.gem --no-document &&
+            ruby -e "
+              require %q(fast_xlsx)
+              wb = FastXlsx::Workbook.new(memory: :constant)
+              wb.add_worksheet << [%q(hello), 42, Time.now]
+              abort %q(not an xlsx) unless wb.to_xlsx.start_with?(%q(PK))
+              puts %Q(fast_xlsx #{FastXlsx::VERSION} OK on #{RUBY_PLATFORM}, Ruby #{RUBY_VERSION})
+            "
+          '
+
   publish:
     name: Publish to RubyGems and GitHub Packages
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [source-gem, cross-gem, smoke-test]
+    needs: [source-gem, cross-gem, smoke-test, smoke-test-musl]
     runs-on: ubuntu-latest
     environment: release
     permissions:
