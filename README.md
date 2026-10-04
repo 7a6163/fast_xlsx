@@ -83,7 +83,7 @@ The [Guide](#guide) below covers every feature; the [API docs](https://www.rubyd
 
 ## Guide
 
-[Writing cells](#writing-cells) · [Rails](#rails) · [Memory modes](#memory-modes) · [Formats](#formats) · [Columns and filters](#columns-and-filters) · [Sheet view and printing](#sheet-view-and-printing) · [Cell ranges](#cell-ranges) · [Layout](#layout) · [Outline groups](#outline-groups) · [Defined names](#defined-names) · [Protection](#protection) · [Conditional formats](#conditional-formats) · [Data validation](#data-validation) · [Comments](#comments) · [Images](#images) · [Tables](#tables) · [Charts](#charts) · [Errors](#errors)
+[Writing cells](#writing-cells) · [Rails](#rails) · [Polars](#polars) · [Memory modes](#memory-modes) · [Formats](#formats) · [Columns and filters](#columns-and-filters) · [Sheet view and printing](#sheet-view-and-printing) · [Cell ranges](#cell-ranges) · [Layout](#layout) · [Outline groups](#outline-groups) · [Defined names](#defined-names) · [Protection](#protection) · [Conditional formats](#conditional-formats) · [Data validation](#data-validation) · [Comments](#comments) · [Images](#images) · [Tables](#tables) · [Charts](#charts) · [Errors](#errors)
 
 ### Writing cells
 
@@ -127,6 +127,23 @@ def export
                         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 end
 ```
+
+### Polars
+
+To write a [ruby-polars](https://github.com/ankane/ruby-polars) DataFrame (gem `polars-df`), hand its column names and rows to fast_xlsx:
+
+```ruby
+df = Polars.read_csv("sales.csv")
+summary = df.group_by("region").agg(Polars.col("amount").sum)
+
+wb = FastXlsx::Workbook.new(memory: :constant)
+ws = wb.add_worksheet("By region")
+ws.append(summary.columns, format: { bold: true })
+summary.iter_rows { |row| ws << row }   # in batches of 512 rows, so memory stays flat
+wb.save("by_region.xlsx")
+```
+
+Polars `Date` and `Datetime` columns become dates (a `Datetime` with a time zone keeps its local time), `Decimal` numbers, and nulls empty cells.
 
 ### Memory modes
 
