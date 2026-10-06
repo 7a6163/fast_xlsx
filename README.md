@@ -5,7 +5,7 @@
 [![Gem Version](https://img.shields.io/gem/v/fast_xlsx)](https://rubygems.org/gems/fast_xlsx)
 [![codecov](https://codecov.io/gh/7a6163/fast_xlsx/graph/badge.svg)](https://codecov.io/gh/7a6163/fast_xlsx)
 
-Fast Excel (`.xlsx`) writer for Ruby, powered by Rust: 20,000 rows in under 100 ms, with memory that stays flat for large exports. Built on [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) via [magnus](https://github.com/matsadler/magnus).
+Write Excel `.xlsx` files from Ruby with a Rust engine ([rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter), via [magnus](https://github.com/matsadler/magnus)): 20,000 rows in under 100 ms, with memory that stays flat for large exports.
 
 > **Status: release candidate.** The API is frozen as of 0.8: 0.8.x releases only fix bugs, and 1.0 follows once it has been in real use without needing changes.
 
