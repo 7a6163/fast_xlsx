@@ -1,4 +1,4 @@
-# FastXlsx
+# fast_xlsx
 
 ![fast_xlsx: fast .xlsx writer for Ruby, powered by Rust](docs/social-preview.jpg)
 
