@@ -237,9 +237,9 @@ impl Workbook {
                 .unwrap(),
         };
         let ws = if self.low_memory {
-            wb.add_worksheet_with_low_memory()
+            wb.add_worksheet_with_low_memory().map_err(xerr)?
         } else if self.constant_memory {
-            wb.add_worksheet_with_constant_memory()
+            wb.add_worksheet_with_constant_memory().map_err(xerr)?
         } else {
             wb.add_worksheet()
         };
