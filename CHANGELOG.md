@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Fixed
+
+- Updated rust_xlsxwriter to 0.100, which brings zip 9.0 (RUSTSEC-2026-0367, -0368 and -0369; those affect extracting archives, which fast_xlsx never does).
+- In `memory: :constant` and `:low` mode, a temporary file that can't be created (e.g. an unwritable temp directory) raises `FastXlsx::Error` instead of crashing the process. The file is also created only when the first row is flushed, not by `add_worksheet`.
+
 ## [0.8.1] - 2026-10-03
 
 ### Fixed
