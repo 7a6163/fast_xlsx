@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-18
+
+The first stable release, with the same API as 0.8.1. From now on fast_xlsx follows Semantic Versioning: no breaking change before 2.0, and anything to be removed first prints a deprecation warning for at least one minor release.
+
 ### Fixed
 
 - Updated rust_xlsxwriter to 0.100, which brings zip 9.0 (RUSTSEC-2026-0367, -0368 and -0369; those affect extracting archives, which fast_xlsx never does).
