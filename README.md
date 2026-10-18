@@ -7,9 +7,9 @@
 
 Write Excel `.xlsx` files from Ruby with a Rust engine ([rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter), via [magnus](https://github.com/matsadler/magnus)): 20,000 rows in under 100 ms, with memory that stays flat for large exports.
 
-> **Status: release candidate.** The API is frozen as of 0.8: 0.8.x releases only fix bugs, and 1.0 follows once it has been in real use without needing changes.
+> **Status: stable.** Since 1.0 the API follows [Semantic Versioning](https://semver.org): no breaking change before 2.0.
 
-**Roadmap:** [1.0.0](https://github.com/7a6163/fast_xlsx/milestone/1) (release plan) · [1.x](https://github.com/7a6163/fast_xlsx/milestone/2) (planned features)
+**Roadmap:** [1.x](https://github.com/7a6163/fast_xlsx/milestone/2) (planned features)
 
 **Contents:** [Installation](#installation) · [Getting started](#getting-started) · [Guide](#guide) · [Performance](#performance) · [Support and versioning](#support-and-versioning) · [Development](#development) · [Credits](#credits)
 
@@ -467,8 +467,8 @@ BUNDLE_GEMFILE=bench/Gemfile /usr/bin/time -l bundle exec ruby bench/memory.rb f
 
 - **Ruby:** CRuby 3.3 and later. A Ruby version is dropped only after it reaches its end of life, and only in a minor release. JRuby and TruffleRuby are not supported (this is a native extension).
 - **Precompiled gems:** Linux (x86_64 and aarch64, glibc and musl; ARM musl), macOS (arm64 and x86_64) and Windows (x64). Before each release the Linux x86_64, macOS arm64 and Windows gems are installed and loaded on Ruby 3.3, 3.4 and 4.0. Other platforms build from source and need a Rust toolchain.
-- **Versions:** from 1.0, [Semantic Versioning](https://semver.org): no breaking API change before 2.0. Until then a minor release (0.x.0) can change behaviour; the [changelog](CHANGELOG.md) lists every change under "Changed".
-- **Deprecations:** from 1.0, a method or option to be removed first prints a warning (with `warn`, so on by default) for at least one minor release, with the CHANGELOG naming its replacement; it goes only in the next major version.
+- **Versions:** [Semantic Versioning](https://semver.org) since 1.0: no breaking API change before 2.0. The [changelog](CHANGELOG.md) lists every change.
+- **Deprecations:** a method or option to be removed first prints a warning (with `warn`, so on by default) for at least one minor release, with the CHANGELOG naming its replacement; it goes only in the next major version.
 - **Output:** `.xlsx` files that open in Excel 2007 and later, LibreOffice and Google Sheets. Updating rust_xlsxwriter can change the bytes of the file but not what it contains.
 
 ## Development
