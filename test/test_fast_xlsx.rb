@@ -921,6 +921,7 @@ class TestFastXlsx < Minitest::Test
 
     assert_equal ["A1:D10", "expression", ["$D1>100"]],
                  conditional_formats(wb).first.values_at(:sqref, :type, :formulas)
+    assert_raises(TypeError) { wb.worksheets.first.conditional_format("A1", type: :formula, value: 1) }
   end
 
   def test_conditional_format_data_bar_and_color_scales
@@ -952,6 +953,16 @@ class TestFastXlsx < Minitest::Test
     )
   end
 
+  def test_conditional_format_top_percent_and_bottom_rank
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format("A1:A9", type: :top, value: 5, percent: true)
+    ws.conditional_format("A1:A9", type: :bottom, value: 2)
+
+    assert_equal([["5", "1", nil], ["2", nil, "1"]],
+                 conditional_formats(wb).map { |r| r[:attrs].values_at("rank", "percent", "bottom") })
+  end
+
   def test_conditional_format_top_rejects_rank_outside_excel_limits
     ws = FastXlsx::Workbook.new.add_worksheet
     [[0, false], [1001, false], [101, true]].each do |value, percent|
@@ -974,6 +985,17 @@ class TestFastXlsx < Minitest::Test
       [[nil, nil, nil], ["0", "1", nil], ["0", nil, "2"]],
       rules.map { |r| r[:attrs].values_at("aboveAverage", "equalAverage", "stdDev") }
     )
+  end
+
+  def test_conditional_format_average_std_dev_one_and_three
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format("A1:A9", type: :average, std_dev: 1)
+    ws.conditional_format("A1:A9", type: :average, criteria: :below, std_dev: 3)
+
+    attrs = conditional_formats(wb).map { |r| r[:attrs].values_at("aboveAverage", "stdDev") }
+    assert_equal [[nil, "1"], %w[0 3]], attrs
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :average, criteria: :sideways) }
   end
 
   def test_conditional_format_average_std_dev_needs_above_or_below
