@@ -1712,7 +1712,8 @@ impl Worksheet {
                 &["type", "format"]
             }
             "icon_set" => &["type", "icons", "reverse", "icons_only"],
-            "data_bar" => &["type", "criteria", "value", "format", "colors", "color"],
+            // colors: is deprecated on :data_bar; the Ruby wrapper warns and drops it.
+            "data_bar" => &["type", "criteria", "value", "format", "color"],
             _ => &["type", "criteria", "value", "format", "colors"],
         };
         check_keys(ruby, options, allowed, &format!("conditional_format :{kind}"))?;
@@ -1731,6 +1732,28 @@ impl Worksheet {
                     format!("invalid {name} {}: {hint}", v.inspect()),
                 ))
             }
+        };
+        // A color for the options added after 1.0, which raise TypeError for a
+        // non-color type (Format keeps its released ArgumentError).
+        let new_color = |c: Value| {
+            if Integer::from_value(c).is_none() && RString::from_value(c).is_none() {
+                return Err(Error::new(
+                    ruby.exception_type_error(),
+                    format!("invalid color {}: use \"#RRGGBB\" or 0xRRGGBB", c.inspect()),
+                ));
+            }
+            color(ruby, c)
+        };
+        // true or false (nil when not given); other values raise TypeError.
+        let flag = |name: &str| {
+            let v = raw_opt(ruby, options, name);
+            if v.to_bool() && !v.is_kind_of(ruby.class_true_class()) {
+                return Err(Error::new(
+                    ruby.exception_type_error(),
+                    format!("invalid {name} {}: use true or false", v.inspect()),
+                ));
+            }
+            Ok(v.to_bool())
         };
         // Built before taking the lock: building converts Ruby values.
         type AddRule = Box<dyn FnOnce(&mut rust_xlsxwriter::Worksheet) -> Result<(), XlsxError>>;
@@ -1883,7 +1906,7 @@ impl Worksheet {
                 let bar = ConditionalFormatDataBar::new();
                 match raw_opt(ruby, options, "color") {
                     c if c.is_nil() => rule(range, bar),
-                    c => rule(range, bar.set_fill_color(color(ruby, c)?)),
+                    c => rule(range, bar.set_fill_color(new_color(c)?)),
                 }
             }
             "icon_set" => {
@@ -1924,8 +1947,8 @@ impl Worksheet {
                     range,
                     ConditionalFormatIconSet::new()
                         .set_icon_type(icon_type)
-                        .reverse_icons(raw_opt(ruby, options, "reverse").to_bool())
-                        .show_icons_only(raw_opt(ruby, options, "icons_only").to_bool()),
+                        .reverse_icons(flag("reverse")?)
+                        .show_icons_only(flag("icons_only")?),
                 )
             }
             _ => {
@@ -1935,42 +1958,42 @@ impl Worksheet {
                     Some(items) => {
                         let mut list = Vec::with_capacity(items.len());
                         each_entry(items, |_, c| {
-                            list.push(color(ruby, c)?);
+                            list.push(new_color(c)?);
                             Ok(())
                         })?;
                         Some(list)
                     }
                     None => None,
                 };
-                let count = match &list {
-                    Some(list) => list.len(),
-                    None => opt::<u8>(ruby, options, "colors")?.unwrap_or(3).into(),
+                let invalid = || {
+                    Error::new(
+                        ruby.exception_arg_error(),
+                        format!(
+                            "invalid colors {}: use 2 or 3, or an Array of 2 or 3 colors",
+                            colors.inspect()
+                        ),
+                    )
                 };
-                match (count, list.as_deref()) {
-                    (2, Some(&[min, max])) => rule(
+                match list.as_deref() {
+                    Some(&[min, max]) => rule(
                         range,
                         ConditionalFormat2ColorScale::new()
                             .set_minimum_color(min)
                             .set_maximum_color(max),
                     ),
-                    (2, _) => rule(range, ConditionalFormat2ColorScale::new()),
-                    (3, Some(&[min, mid, max])) => rule(
+                    Some(&[min, mid, max]) => rule(
                         range,
                         ConditionalFormat3ColorScale::new()
                             .set_minimum_color(min)
                             .set_midpoint_color(mid)
                             .set_maximum_color(max),
                     ),
-                    (3, _) => rule(range, ConditionalFormat3ColorScale::new()),
-                    _ => {
-                        return Err(Error::new(
-                            ruby.exception_arg_error(),
-                            format!(
-                                "invalid colors {}: use 2 or 3, or an Array of 2 or 3 colors",
-                                colors.inspect()
-                            ),
-                        ))
-                    }
+                    Some(_) => return Err(invalid()),
+                    None => match opt::<u8>(ruby, options, "colors")?.unwrap_or(3) {
+                        2 => rule(range, ConditionalFormat2ColorScale::new()),
+                        3 => rule(range, ConditionalFormat3ColorScale::new()),
+                        _ => return Err(invalid()),
+                    },
                 }
             }
         };

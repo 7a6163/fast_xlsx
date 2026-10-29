@@ -337,7 +337,7 @@ ws.conditional_format(0, 2, 99, 2, type: :icon_set, icons: :three_arrows) # reve
 | `:data_bar`, `:color_scale` | — | — |
 | `:icon_set` | — | — |
 
-Colors are `"#RRGGBB"` or `0xRRGGBB`. `:data_bar` takes `color:`; `:color_scale` takes `colors:`, either `2` or `3` or the 2 or 3 colors from minimum to maximum. `:icon_set` takes `icons:` (default `:three_traffic_lights`): `:three_arrows`, `:three_arrows_gray`, `:three_flags`, `:three_traffic_lights`, `:three_traffic_lights_with_rim`, `:three_signs`, `:three_symbols_circled`, `:three_symbols`, `:three_stars`, `:three_triangles`, `:four_arrows`, `:four_arrows_gray`, `:four_red_to_black`, `:four_histograms`, `:four_traffic_lights`, `:five_arrows`, `:five_arrows_gray`, `:five_histograms`, `:five_quadrants`, `:five_boxes`; `reverse: true` reverses their order and `icons_only: true` hides the cell values.
+Colors are `"#RRGGBB"` or `0xRRGGBB`. `:data_bar` takes `color:`, which sets both the bar's fill and its border; `:color_scale` takes `colors:`, either `2` or `3` or the 2 or 3 colors from minimum to maximum. `:icon_set` takes `icons:` (default `:three_traffic_lights`): `:three_arrows`, `:three_arrows_gray`, `:three_flags`, `:three_traffic_lights`, `:three_traffic_lights_with_rim`, `:three_signs`, `:three_symbols_circled`, `:three_symbols`, `:three_stars`, `:three_triangles`, `:four_arrows`, `:four_arrows_gray`, `:four_red_to_black`, `:four_histograms`, `:four_traffic_lights`, `:five_arrows`, `:five_arrows_gray`, `:five_histograms`, `:five_quadrants`, `:five_boxes`; `reverse: true` reverses their order and `icons_only: true` hides the cell values.
 
 ### Data validation
 

@@ -348,14 +348,19 @@ module FastXlsx
     # @option options [Integer] :std_dev 1, 2 or 3 standard deviations (:average)
     # @option options [Integer, Array] :colors 2 or 3, or the 2 or 3 colors
     #   ("#RRGGBB" or 0xRRGGBB) from minimum to maximum (:color_scale)
-    # @option options [String, Integer] :color bar color, "#RRGGBB" or 0xRRGGBB (:data_bar)
+    # @option options [String, Integer] :color bar fill and border color,
+    #   "#RRGGBB" or 0xRRGGBB (:data_bar)
     # @option options [Symbol] :icons e.g. :three_arrows, :five_boxes; default
     #   :three_traffic_lights (:icon_set)
-    # @option options [Boolean] :reverse, :icons_only reverse the icons, hide
-    #   the values (:icon_set)
+    # @option options [Boolean] :reverse reverse the order of the icons (:icon_set)
+    # @option options [Boolean] :icons_only hide the cell values (:icon_set)
     # @return [self]
     def conditional_format(*range, type:, **options)
       options[:format] = Format._coerce(options[:format]) if options.key?(:format)
+      if type == :data_bar && options.key?(:colors)
+        warn "fast_xlsx: colors: is ignored on :data_bar and will raise in 2.0; use color:", uplevel: 1
+        options.delete(:colors)
+      end
       _conditional_format(*CellRange.split(range).first, { type: type, **options })
     end
 

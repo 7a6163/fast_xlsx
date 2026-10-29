@@ -977,10 +977,51 @@ class TestFastXlsx < Minitest::Test
     error = assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, colors: ["#FF0000"]) }
     assert_includes error.message, "2 or 3"
     assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, colors: []) }
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, colors: 4) }
     error = assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, colors: %w[red #00FF00]) }
     assert_includes error.message, "red"
     assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :data_bar, color: "#12345") }
     assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, color: "#123456") }
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :data_bar, color: 0x1000000) }
+    assert_raises(TypeError) { ws.conditional_format("A1:A9", type: :data_bar, color: :red) }
+    assert_raises(TypeError) { ws.conditional_format("A1:A9", type: :color_scale, colors: [nil, "#00FF00"]) }
+    assert_raises(TypeError) { ws.conditional_format("A1:A9", type: :color_scale, colors: [1.5, 2.5, 3.5]) }
+  end
+
+  def test_conditional_format_icon_set_types
+    {
+      three_arrows: "3Arrows", three_arrows_gray: "3ArrowsGray", three_flags: "3Flags",
+      three_traffic_lights: nil, three_traffic_lights_with_rim: "3TrafficLights2", three_signs: "3Signs",
+      three_symbols_circled: "3Symbols", three_symbols: "3Symbols2", three_stars: "3Stars",
+      three_triangles: "3Triangles", four_arrows: "4Arrows", four_arrows_gray: "4ArrowsGray",
+      four_red_to_black: "4RedToBlack", four_histograms: "4Rating", four_traffic_lights: "4TrafficLights",
+      five_arrows: "5Arrows", five_arrows_gray: "5ArrowsGray", five_histograms: "5Rating",
+      five_quadrants: "5Quarters", five_boxes: "5Boxes"
+    }.each do |icons, xml|
+      wb = FastXlsx::Workbook.new
+      wb.add_worksheet.conditional_format("A1:A9", type: :icon_set, icons: icons)
+      icon_set = Nokogiri::XML(sheet_xml(wb)).remove_namespaces!.at("iconSet") # 3Stars etc. are only in the x14 extLst
+      assert_equal xml ? { "iconSet" => xml } : {}, icon_set.attributes.transform_values(&:value), icons
+    end
+  end
+
+  def test_conditional_format_icon_set_flags_must_be_booleans
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format("A1:A9", type: :icon_set, reverse: false, icons_only: false)
+    assert_equal({}, conditional_formats(wb).first[:icon_set])
+    assert_raises(TypeError) { ws.conditional_format("A1:A9", type: :icon_set, reverse: 1) }
+    assert_raises(TypeError) { ws.conditional_format("A1:A9", type: :icon_set, icons_only: "yes") }
+  end
+
+  def test_data_bar_colors_is_deprecated
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    assert_output(nil, /colors: is ignored on :data_bar.*color:/) do
+      ws.conditional_format("A1:A9", type: :data_bar, colors: ["#FF0000"])
+    end
+    assert_output(nil, "") { ws.conditional_format("A1:A9", type: :data_bar, color: "#FF0000") }
+    assert_equal %w[dataBar dataBar], conditional_formats(wb).map { |r| r[:type] }
   end
 
   def test_conditional_format_top_and_bottom
