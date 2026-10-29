@@ -1052,6 +1052,59 @@ class TestFastXlsx < Minitest::Test
     assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new("not an image")) }
   end
 
+  def test_embed_image_from_path_and_io
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "logo.png")
+      File.binwrite(path, PNG_1X1)
+      wb = FastXlsx::Workbook.new
+      ws = wb.add_worksheet
+      assert_same ws, ws.embed_image(2, 1, path)
+      ws.embed_image("D5", StringIO.new(PNG_4X2))
+
+      embedded = embedded_images(wb)
+      assert_equal %w[B3 D5], embedded[:cells].keys
+      assert_equal 2, embedded[:media]
+      assert_empty images(wb).first # in the cell, not in a drawing
+    end
+  end
+
+  def test_embed_image_with_alt_text_and_format
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.embed_image(0, 0, StringIO.new(PNG_1X1), alt_text: "Company logo", format: { align: :center })
+    ws.embed_image(1, 0, StringIO.new(PNG_4X2), format: FastXlsx::Format.new(bg_color: "#00FF00"))
+
+    cells = embedded_images(wb)[:cells]
+    assert_equal ["Company logo", nil], cells.values.map(&:last)
+    assert_equal "center", cell_style(wb, "A1")[:align]
+    assert_equal "FF00FF00", cell_style(wb, "A2")[:bg_color]
+  end
+
+  def test_embed_image_rejects_non_image_data_and_unknown_options
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(FastXlsx::Error) { ws.embed_image(0, 0, StringIO.new("not an image")) }
+    error = assert_raises(ArgumentError) { ws.embed_image(0, 0, StringIO.new(PNG_1X1), scale: 2) }
+    assert_includes error.message, "scale"
+  end
+
+  def test_append_goes_below_an_embedded_image
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.embed_image(0, 1, StringIO.new(PNG_1X1)) << %w[next]
+
+    assert_equal %w[next], rows(wb).last.compact
+  end
+
+  # rust_xlsxwriter only numbers embedded images when saving, and panics when
+  # it writes such a cell to disk earlier.
+  def test_embed_image_is_refused_in_constant_and_low_memory
+    %i[constant low].each do |memory|
+      ws = FastXlsx::Workbook.new(memory: memory).add_worksheet
+      error = assert_raises(FastXlsx::Error, memory.to_s) { ws.embed_image(0, 0, StringIO.new(PNG_1X1)) }
+      assert_includes error.message, "memory"
+    end
+  end
+
   SALES = [%w[Month Sales], ["Jan", 10], ["Feb", 25], ["Mar", 18]].freeze
   SALES_SERIES = { name: "Sales", categories: "Sheet1!$A$2:$A$4", values: "Sheet1!$B$2:$B$4" }.freeze
 

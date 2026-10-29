@@ -1911,6 +1911,40 @@ impl Worksheet {
         Ok(rb_self)
     }
 
+    fn embed_image(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        row: u32,
+        col: u16,
+        bytes: RString,
+        alt_text: Option<String>,
+        format: Option<&Format>,
+    ) -> Result<Obj<Self>, Error> {
+        // rust_xlsxwriter numbers embedded images only when saving, and panics
+        // if it writes the cell to disk before that.
+        if rb_self.flushes_rows {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                "embed_image is not supported in constant_memory / low_memory mode",
+            ));
+        }
+        // SAFETY: the bytes are copied into the Image before any Ruby code runs.
+        let mut image = Image::new_from_buffer(unsafe { bytes.as_slice() }).map_err(xerr)?;
+        if let Some(alt_text) = alt_text {
+            image = image.set_alt_text(alt_text);
+        }
+        rb_self.with_ws(|ws| {
+            match format {
+                Some(f) => ws.embed_image_with_format(row, col, &image, &f.0.format),
+                None => ws.embed_image(row, col, &image),
+            }
+            .map(|_| ())
+            .map_err(xerr)
+        })?;
+        rb_self.advance(row);
+        Ok(rb_self)
+    }
+
     fn insert_chart(
         ruby: &Ruby,
         rb_self: Obj<Self>,
@@ -2287,6 +2321,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("name", method!(Worksheet::name, 0))?;
     ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
     ws.define_method("_insert_image", method!(Worksheet::insert_image, 4))?;
+    ws.define_method("_embed_image", method!(Worksheet::embed_image, 5))?;
     ws.define_method("_insert_chart", method!(Worksheet::insert_chart, 3))?;
     ws.define_method("_add_table", method!(Worksheet::add_table, 5))?;
     ws.define_method(

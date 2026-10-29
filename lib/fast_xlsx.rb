@@ -375,6 +375,21 @@ module FastXlsx
       _insert_image(row, col, bytes, { ** })
     end
 
+    # Embeds a PNG, JPEG, GIF or BMP image in the cell, where it fits the cell
+    # and moves and sizes with it (Excel 365's "Place in Cell"; older Excel
+    # shows #VALUE!). Not available in memory: :constant or :low mode.
+    # @overload embed_image(*cell, source, alt_text: nil, format: nil)
+    #   @param source [String, #read] a file path or an IO
+    #   @param alt_text [String, nil]
+    #   @param format [Format, Hash, nil] the cell's format, e.g. to center the image
+    # @return [self]
+    # @raise [FastXlsx::Error] for data that isn't a supported image, or in those modes
+    def embed_image(*args, alt_text: nil, format: nil)
+      row, col, (source, *) = CellRange.cell(args, 1..1)
+      bytes = source.respond_to?(:read) ? source.read : File.binread(source)
+      _embed_image(row, col, bytes, alt_text, Format._coerce(format))
+    end
+
     # Inserts a chart with its top-left corner in the cell.
     # @param cell (row, col) or "B2"
     # @param type [Symbol] :area, :bar, :column, :line, :pie, :doughnut,

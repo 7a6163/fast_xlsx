@@ -138,6 +138,8 @@ module FastXlsx
                        ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
                     | (String cell, String | _Reader source, ?scale: Numeric, ?width: Numeric, ?height: Numeric,
                        ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
+    def embed_image: (Integer row, Integer col, String | _Reader source, ?alt_text: String?, ?format: format?) -> self
+                   | (String cell, String | _Reader source, ?alt_text: String?, ?format: format?) -> self
     type chart_series = { values: String, ?categories: String, ?name: String }
 
     def insert_chart: (Integer row, Integer col, type: Symbol, series: Array[chart_series],

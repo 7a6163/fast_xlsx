@@ -137,6 +137,19 @@ module XlsxHelpers
     [anchors, media]
   end
 
+  # Images embedded in cells of sheet 1: { cells: { "B3" => [style index, alt text] }, media: count }.
+  # Each such cell is an error cell whose vm attribute (1-based) picks its rich value.
+  def embedded_images(workbook)
+    zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))
+    sheet = Nokogiri::XML(zip.read("xl/worksheets/sheet1.xml")).remove_namespaces!
+    values = Nokogiri::XML(zip.read("xl/richData/rdrichvalue.xml")).remove_namespaces!.css("rv")
+    cells = sheet.css("c[vm]").to_h do |c|
+      alt_text = values[c["vm"].to_i - 1].css("v")[2]&.text
+      [c["r"], [c["s"]&.to_i, alt_text]]
+    end
+    { cells: cells, media: zip.glob("xl/media/*").size }
+  end
+
   # The first chart on sheet 1: plot type, series ranges, titles, and its anchor cell and size.
   def chart(workbook)
     zip = Zip::File.open_buffer(StringIO.new(workbook.to_xlsx))

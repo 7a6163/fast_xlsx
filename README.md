@@ -254,7 +254,7 @@ ws.autofilter(0..100, 0..3)   # rows and columns, each an Integer or a Range
 ws.merge_range(0, 0..3, "Q3 report", title) # row 1, columns A–D
 ```
 
-Methods that take one cell (`write`, `write_comment`, `insert_image`, `insert_chart`, `freeze_panes`) take `(row, col)` or a reference like `"B2"`.
+Methods that take one cell (`write`, `write_comment`, `insert_image`, `embed_image`, `insert_chart`, `freeze_panes`) take `(row, col)` or a reference like `"B2"`.
 
 `autofit` only sees rows still in memory, so in `:constant` / `:low` memory mode it ignores rows already written to disk; set widths with `column_width` instead.
 
@@ -350,6 +350,7 @@ ws.write_comment(0, 0, "Checked by finance", author: "Zac")   # Excel shows it a
 ws.insert_image(0, 0, "logo.png")                                  # top-left corner in A1
 ws.insert_image(0, 5, StringIO.new(blob.download), scale: 0.5, x_offset: 10, y_offset: 4, alt_text: "Logo")
 ws.insert_image(10, 0, "chart.png", width: 320, height: 180)       # pixel size; one of them keeps the aspect ratio
+ws.embed_image("B12", "photo.png", alt_text: "Photo", format: { align: :center }) # in the cell, sized with it (Excel 365; not in memory: :constant/:low)
 ```
 
 A String is always treated as a path, so wrap raw bytes (such as Active Storage's `blob.download`) in a `StringIO`.
