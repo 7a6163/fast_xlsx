@@ -13,7 +13,8 @@ use rust_xlsxwriter::{
     ConditionalFormatAverage, ConditionalFormatAverageRule, ConditionalFormatBlank,
     ConditionalFormatCell, ConditionalFormatCellRule, ConditionalFormatDataBar,
     ConditionalFormatDate, ConditionalFormatDateRule, ConditionalFormatDuplicate,
-    ConditionalFormatError, ConditionalFormatFormula, ConditionalFormatText,
+    ConditionalFormatError, ConditionalFormatFormula, ConditionalFormatIconSet,
+    ConditionalFormatIconType, ConditionalFormatText,
     ConditionalFormatTextRule, ConditionalFormatTop, ConditionalFormatTopRule,
     ConditionalFormatValue, DataValidation, DataValidationRule, FormatAlign, FormatBorder,
     FormatScript, FormatUnderline, IgnoreError, IntoDataValidationValue, IntoExcelData, XlsxError,
@@ -1698,6 +1699,7 @@ impl Worksheet {
                 ("error", "error"),
                 ("not_error", "not_error"),
                 ("date", "date"),
+                ("icon_set", "icon_set"),
             ],
         )?;
         // Each type takes only the options it uses, except the types released
@@ -1709,6 +1711,8 @@ impl Worksheet {
             "duplicate" | "unique" | "blank" | "not_blank" | "error" | "not_error" => {
                 &["type", "format"]
             }
+            "icon_set" => &["type", "icons", "reverse", "icons_only"],
+            "data_bar" => &["type", "criteria", "value", "format", "colors", "color"],
             _ => &["type", "criteria", "value", "format", "colors"],
         };
         check_keys(ruby, options, allowed, &format!("conditional_format :{kind}"))?;
@@ -1875,17 +1879,100 @@ impl Worksheet {
                 )?;
                 formatted!(ConditionalFormatDate::new().set_rule(period))
             }
-            "data_bar" => rule(range, ConditionalFormatDataBar::new()),
-            _ => match opt::<u8>(ruby, options, "colors")?.unwrap_or(3) {
-                2 => rule(range, ConditionalFormat2ColorScale::new()),
-                3 => rule(range, ConditionalFormat3ColorScale::new()),
-                n => {
-                    return Err(Error::new(
-                        ruby.exception_arg_error(),
-                        format!("invalid colors {n}: use 2 or 3"),
-                    ))
+            "data_bar" => {
+                let bar = ConditionalFormatDataBar::new();
+                match raw_opt(ruby, options, "color") {
+                    c if c.is_nil() => rule(range, bar),
+                    c => rule(range, bar.set_fill_color(color(ruby, c)?)),
                 }
-            },
+            }
+            "icon_set" => {
+                use ConditionalFormatIconType as I;
+                let icons = raw_opt(ruby, options, "icons");
+                let icon_type = if icons.is_nil() {
+                    I::ThreeTrafficLights
+                } else {
+                    choice(
+                        ruby,
+                        "icons",
+                        icons,
+                        &[
+                            ("three_arrows", I::ThreeArrows),
+                            ("three_arrows_gray", I::ThreeArrowsGray),
+                            ("three_flags", I::ThreeFlags),
+                            ("three_traffic_lights", I::ThreeTrafficLights),
+                            ("three_traffic_lights_with_rim", I::ThreeTrafficLightsWithRim),
+                            ("three_signs", I::ThreeSigns),
+                            ("three_symbols_circled", I::ThreeSymbolsCircled),
+                            ("three_symbols", I::ThreeSymbols),
+                            ("three_stars", I::ThreeStars),
+                            ("three_triangles", I::ThreeTriangles),
+                            ("four_arrows", I::FourArrows),
+                            ("four_arrows_gray", I::FourArrowsGray),
+                            ("four_red_to_black", I::FourRedToBlack),
+                            ("four_histograms", I::FourHistograms),
+                            ("four_traffic_lights", I::FourTrafficLights),
+                            ("five_arrows", I::FiveArrows),
+                            ("five_arrows_gray", I::FiveArrowsGray),
+                            ("five_histograms", I::FiveHistograms),
+                            ("five_quadrants", I::FiveQuadrants),
+                            ("five_boxes", I::FiveBoxes),
+                        ],
+                    )?
+                };
+                rule(
+                    range,
+                    ConditionalFormatIconSet::new()
+                        .set_icon_type(icon_type)
+                        .reverse_icons(raw_opt(ruby, options, "reverse").to_bool())
+                        .show_icons_only(raw_opt(ruby, options, "icons_only").to_bool()),
+                )
+            }
+            _ => {
+                // colors: is how many (2 or 3), or the colors from minimum to maximum.
+                let colors = raw_opt(ruby, options, "colors");
+                let list = match RArray::from_value(colors) {
+                    Some(items) => {
+                        let mut list = Vec::with_capacity(items.len());
+                        each_entry(items, |_, c| {
+                            list.push(color(ruby, c)?);
+                            Ok(())
+                        })?;
+                        Some(list)
+                    }
+                    None => None,
+                };
+                let count = match &list {
+                    Some(list) => list.len(),
+                    None => opt::<u8>(ruby, options, "colors")?.unwrap_or(3).into(),
+                };
+                match (count, list.as_deref()) {
+                    (2, Some(&[min, max])) => rule(
+                        range,
+                        ConditionalFormat2ColorScale::new()
+                            .set_minimum_color(min)
+                            .set_maximum_color(max),
+                    ),
+                    (2, _) => rule(range, ConditionalFormat2ColorScale::new()),
+                    (3, Some(&[min, mid, max])) => rule(
+                        range,
+                        ConditionalFormat3ColorScale::new()
+                            .set_minimum_color(min)
+                            .set_midpoint_color(mid)
+                            .set_maximum_color(max),
+                    ),
+                    (3, _) => rule(range, ConditionalFormat3ColorScale::new()),
+                    _ => {
+                        return Err(Error::new(
+                            ruby.exception_arg_error(),
+                            format!(
+                                "invalid colors {}: use 2 or 3, or an Array of 2 or 3 colors",
+                                colors.inspect()
+                            ),
+                        ))
+                    }
+                }
+            }
         };
         rb_self.with_ws(|ws| add_rule(ws).map_err(xerr))?;
         Ok(rb_self)

@@ -936,6 +936,53 @@ class TestFastXlsx < Minitest::Test
     assert_equal([3, 2], rules.drop(1).map { |r| r[:stops] })
   end
 
+  def test_conditional_format_icon_sets
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format(0, 0, 9, 0, type: :icon_set)
+    ws.conditional_format(0, 1, 9, 1, type: :icon_set, icons: :five_arrows, reverse: true, icons_only: true)
+    ws.conditional_format(0, 2, 9, 2, type: :icon_set, icons: :four_red_to_black)
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[iconSet iconSet iconSet], rules.map { |r| r[:type] })
+    assert_equal [3, 5, 4], rules.map { |r| r[:stops] }
+    assert_equal({}, rules[0][:icon_set]) # Excel's default, 3 traffic lights
+    assert_equal({ "iconSet" => "5Arrows", "reverse" => "1", "showValue" => "0" }, rules[1][:icon_set])
+    assert_equal({ "iconSet" => "4RedToBlack" }, rules[2][:icon_set])
+  end
+
+  def test_conditional_format_icon_set_options
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :icon_set, icons: :smileys) }
+    assert_includes error.message, ":three_arrows"
+    error = assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :icon_set, format: { bold: true }) }
+    assert_includes error.message, "format"
+  end
+
+  def test_conditional_format_custom_colors
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format(0, 0, 9, 0, type: :data_bar, color: "#009933")
+    ws.conditional_format(0, 1, 9, 1, type: :color_scale, colors: ["#F8696B", 0x63BE7B])
+    ws.conditional_format(0, 2, 9, 2, type: :color_scale, colors: %w[#F8696B #FFEB84 #63BE7B])
+
+    rules = conditional_formats(wb)
+    assert_equal %w[FF009933], rules[0][:colors]
+    assert_equal [2, %w[FFF8696B FF63BE7B]], rules[1].values_at(:stops, :colors)
+    assert_equal [3, %w[FFF8696B FFFFEB84 FF63BE7B]], rules[2].values_at(:stops, :colors)
+  end
+
+  def test_conditional_format_custom_colors_are_checked
+    ws = FastXlsx::Workbook.new.add_worksheet
+    error = assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, colors: ["#FF0000"]) }
+    assert_includes error.message, "2 or 3"
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, colors: []) }
+    error = assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, colors: %w[red #00FF00]) }
+    assert_includes error.message, "red"
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :data_bar, color: "#12345") }
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :color_scale, color: "#123456") }
+  end
+
   def test_conditional_format_top_and_bottom
     wb = FastXlsx::Workbook.new
     ws = wb.add_worksheet

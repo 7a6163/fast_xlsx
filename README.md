@@ -319,8 +319,10 @@ ws.conditional_format(0, 1, 99, 1, type: :top, value: 10, format: red)  # or :bo
 ws.conditional_format(0, 1, 99, 1, type: :average, criteria: :below, std_dev: 1, format: red)
 ws.conditional_format(0, 0, 99, 0, type: :duplicate, format: red)
 ws.conditional_format(0, 4, 99, 4, type: :date, criteria: :last_7_days, format: red)
-ws.conditional_format(0, 2, 99, 2, type: :data_bar)
-ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; colors: 2 for 2-color
+ws.conditional_format(0, 2, 99, 2, type: :data_bar)                       # or color: "#63BE7B"
+ws.conditional_format(0, 2, 99, 2, type: :color_scale)                    # 3-color; colors: 2 for 2-color
+ws.conditional_format(0, 2, 99, 2, type: :color_scale, colors: %w[#F8696B #FFEB84 #63BE7B]) # min, mid, max
+ws.conditional_format(0, 2, 99, 2, type: :icon_set, icons: :three_arrows) # reverse: true, icons_only: true
 ```
 
 | `type` | `criteria` | `value` |
@@ -333,6 +335,9 @@ ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; col
 | `:duplicate`, `:unique`, `:blank`, `:not_blank`, `:error`, `:not_error` | — | — |
 | `:date` | `:yesterday`, `:today`, `:tomorrow`, `:last_7_days`, `:last_week`, `:this_week`, `:next_week`, `:last_month`, `:this_month`, `:next_month` | — |
 | `:data_bar`, `:color_scale` | — | — |
+| `:icon_set` | — | — |
+
+Colors are `"#RRGGBB"` or `0xRRGGBB`. `:data_bar` takes `color:`; `:color_scale` takes `colors:`, either `2` or `3` or the 2 or 3 colors from minimum to maximum. `:icon_set` takes `icons:` (default `:three_traffic_lights`): `:three_arrows`, `:three_arrows_gray`, `:three_flags`, `:three_traffic_lights`, `:three_traffic_lights_with_rim`, `:three_signs`, `:three_symbols_circled`, `:three_symbols`, `:three_stars`, `:three_triangles`, `:four_arrows`, `:four_arrows_gray`, `:four_red_to_black`, `:four_histograms`, `:four_traffic_lights`, `:five_arrows`, `:five_arrows_gray`, `:five_histograms`, `:five_quadrants`, `:five_boxes`; `reverse: true` reverses their order and `icons_only: true` hides the cell values.
 
 ### Data validation
 
