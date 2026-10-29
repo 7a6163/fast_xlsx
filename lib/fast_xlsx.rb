@@ -330,10 +330,15 @@ module FastXlsx
     # Highlights cells in the range by rule; see the README for each type's
     # options.
     # @param range a cell range (see {Worksheet})
-    # @param type [Symbol] :cell, :text, :formula, :data_bar or :color_scale
-    # @option options [Symbol] :criteria e.g. :>, :between, :contains
-    # @option options [Numeric, String, Array] :value
+    # @param type [Symbol] :cell, :text, :formula, :top, :bottom, :average,
+    #   :duplicate, :unique, :blank, :not_blank, :error, :not_error, :date,
+    #   :data_bar or :color_scale
+    # @option options [Symbol] :criteria e.g. :>, :between, :contains,
+    #   :below (:average), :last_7_days (:date)
+    # @option options [Numeric, String, Array] :value (:top and :bottom: how many, default 10)
     # @option options [Format, Hash] :format
+    # @option options [Boolean] :percent value is a percentage (:top, :bottom)
+    # @option options [Integer] :std_dev 1, 2 or 3 standard deviations (:average)
     # @option options [Integer] :colors 2 or 3 (:color_scale)
     # @return [self]
     def conditional_format(*range, type:, **options)
