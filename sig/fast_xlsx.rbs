@@ -124,9 +124,10 @@ module FastXlsx
                    | (indexes rows, indexes cols, cell value, ?format? format) -> self
                    | (*cell_range | cell args, format: format?) -> self
     def conditional_format: (*cell_range range,
-                             type: :cell | :text | :formula | :data_bar | :color_scale,
+                             type: :cell | :text | :formula | :top | :bottom | :average | :duplicate | :unique
+                                 | :blank | :not_blank | :error | :not_error | :date | :data_bar | :color_scale,
                              ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
-                             ?format: format, ?colors: 2 | 3) -> self
+                             ?format: format, ?percent: bool, ?std_dev: 1 | 2 | 3, ?colors: 2 | 3) -> self
     def data_validation: (*cell_range range,
                           type: :list | :whole_number | :decimal | :text_length,
                           ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
@@ -138,6 +139,8 @@ module FastXlsx
                        ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
                     | (String cell, String | _Reader source, ?scale: Numeric, ?width: Numeric, ?height: Numeric,
                        ?x_offset: Integer, ?y_offset: Integer, ?alt_text: String) -> self
+    def embed_image: (Integer row, Integer col, String | _Reader source, ?alt_text: String?, ?format: format?) -> self
+                   | (String cell, String | _Reader source, ?alt_text: String?, ?format: format?) -> self
     type chart_series = { values: String, ?categories: String, ?name: String }
 
     def insert_chart: (Integer row, Integer col, type: Symbol, series: Array[chart_series],

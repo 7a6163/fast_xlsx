@@ -921,6 +921,7 @@ class TestFastXlsx < Minitest::Test
 
     assert_equal ["A1:D10", "expression", ["$D1>100"]],
                  conditional_formats(wb).first.values_at(:sqref, :type, :formulas)
+    assert_raises(TypeError) { wb.worksheets.first.conditional_format("A1", type: :formula, value: 1) }
   end
 
   def test_conditional_format_data_bar_and_color_scales
@@ -933,6 +934,148 @@ class TestFastXlsx < Minitest::Test
     rules = conditional_formats(wb)
     assert_equal(%w[dataBar colorScale colorScale], rules.map { |r| r[:type] })
     assert_equal([3, 2], rules.drop(1).map { |r| r[:stops] })
+  end
+
+  def test_conditional_format_top_and_bottom
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    red = FastXlsx::Format.new(font_color: "#FF0000")
+    ws.conditional_format(0, 0, 9, 0, type: :top, value: 3, format: red)
+    ws.conditional_format(0, 1, 9, 1, type: :bottom, value: 20, percent: true, format: red)
+    ws.conditional_format(0, 2, 9, 2, type: :top)
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[top10] * 3, rules.map { |r| r[:type] })
+    assert_equal "FFFF0000", rules[0][:font_color]
+    assert_equal(
+      [["3", nil, nil], %w[20 1 1], ["10", nil, nil]],
+      rules.map { |r| r[:attrs].values_at("rank", "percent", "bottom") }
+    )
+  end
+
+  def test_conditional_format_top_percent_and_bottom_rank
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format("A1:A9", type: :top, value: 5, percent: true)
+    ws.conditional_format("A1:A9", type: :bottom, value: 2)
+
+    assert_equal([["5", "1", nil], ["2", nil, "1"]],
+                 conditional_formats(wb).map { |r| r[:attrs].values_at("rank", "percent", "bottom") })
+  end
+
+  def test_conditional_format_top_rejects_rank_outside_excel_limits
+    ws = FastXlsx::Workbook.new.add_worksheet
+    [[0, false], [1001, false], [101, true]].each do |value, percent|
+      assert_raises(ArgumentError, value.to_s) do
+        ws.conditional_format("A1:A9", type: :top, value: value, percent: percent)
+      end
+    end
+  end
+
+  def test_conditional_format_average
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format("A1:A9", type: :average)
+    ws.conditional_format("A1:A9", type: :average, criteria: :below_or_equal)
+    ws.conditional_format("A1:A9", type: :average, criteria: :below, std_dev: 2)
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[aboveAverage] * 3, rules.map { |r| r[:type] })
+    assert_equal(
+      [[nil, nil, nil], ["0", "1", nil], ["0", nil, "2"]],
+      rules.map { |r| r[:attrs].values_at("aboveAverage", "equalAverage", "stdDev") }
+    )
+  end
+
+  def test_conditional_format_average_std_dev_one_and_three
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format("A1:A9", type: :average, std_dev: 1)
+    ws.conditional_format("A1:A9", type: :average, criteria: :below, std_dev: 3)
+
+    attrs = conditional_formats(wb).map { |r| r[:attrs].values_at("aboveAverage", "stdDev") }
+    assert_equal [[nil, "1"], %w[0 3]], attrs
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :average, criteria: :sideways) }
+  end
+
+  def test_conditional_format_average_std_dev_needs_above_or_below
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :average, std_dev: 4) }
+    assert_raises(ArgumentError) do
+      ws.conditional_format("A1:A9", type: :average, criteria: :above_or_equal, std_dev: 1)
+    end
+  end
+
+  def test_conditional_format_duplicates_blanks_and_errors
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    red = FastXlsx::Format.new(font_color: "#FF0000")
+    types = %i[duplicate unique blank not_blank error not_error]
+    types.each { |type| ws.conditional_format("A1:A9", type: type, format: red) }
+
+    rules = conditional_formats(wb)
+    assert_equal %w[duplicateValues uniqueValues containsBlanks notContainsBlanks containsErrors notContainsErrors],
+                 rules.map { |r| r[:type] }
+    assert_equal(["FFFF0000"] * 6, rules.map { |r| r[:font_color] })
+  end
+
+  def test_conditional_format_date_periods
+    periods = {
+      yesterday: "yesterday", today: "today", tomorrow: "tomorrow", last_7_days: "last7Days",
+      last_week: "lastWeek", this_week: "thisWeek", next_week: "nextWeek",
+      last_month: "lastMonth", this_month: "thisMonth", next_month: "nextMonth"
+    }
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    periods.each_key do |period|
+      ws.conditional_format("A1:A9", type: :date, criteria: period, format: FastXlsx::Format.new(bold: true))
+    end
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[timePeriod] * 10, rules.map { |r| r[:type] })
+    assert_equal(periods.values, rules.map { |r| r[:attrs]["timePeriod"] })
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :date, criteria: :someday) }
+  end
+
+  def test_conditional_format_new_types_reject_options_they_do_not_use
+    ws = FastXlsx::Workbook.new.add_worksheet
+    {
+      top: { criteria: :above }, bottom: { std_dev: 1 }, average: { value: 3 }, duplicate: { value: 1 },
+      unique: { criteria: :above }, blank: { colors: 2 }, not_blank: { percent: true },
+      error: { value: 1 }, not_error: { criteria: :today }, date: { criteria: :today, value: 1 }
+    }.each do |type, options|
+      error = assert_raises(ArgumentError, type.to_s) { ws.conditional_format("A1:A9", type: type, **options) }
+      assert_includes error.message, options.keys.last.to_s, type
+    end
+  end
+
+  def test_conditional_format_percent_and_std_dev_only_where_used
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :cell, criteria: :<, value: 0, percent: true) }
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :data_bar, std_dev: 1) }
+    # released types keep accepting options they ignore
+    ws.conditional_format("A1:A9", type: :data_bar, value: 1, criteria: :<)
+  end
+
+  def test_conditional_format_top_value_must_be_a_whole_rank
+    ws = FastXlsx::Workbook.new.add_worksheet
+    [70_000, -1, 10.9].each do |value|
+      error = assert_raises(ArgumentError, value.to_s) { ws.conditional_format("A1:A9", type: :top, value: value) }
+      assert_includes error.message, "1..1000"
+    end
+    error = assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :top, value: 1.5, percent: true) }
+    assert_includes error.message, "1..100"
+    assert_raises(TypeError) { ws.conditional_format("A1:A9", type: :top, value: "3") }
+  end
+
+  def test_conditional_format_std_dev_must_be_one_two_or_three
+    ws = FastXlsx::Workbook.new.add_worksheet
+    [300, -1, 1.5].each do |std_dev|
+      error = assert_raises(ArgumentError, std_dev.to_s) do
+        ws.conditional_format("A1:A9", type: :average, std_dev: std_dev)
+      end
+      assert_includes error.message, "use 1, 2 or 3"
+    end
   end
 
   def test_conditional_format_rejects_unknown_type_and_criteria
@@ -1050,6 +1193,68 @@ class TestFastXlsx < Minitest::Test
   def test_insert_image_rejects_non_image_data
     ws = FastXlsx::Workbook.new.add_worksheet
     assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new("not an image")) }
+  end
+
+  def test_embed_image_from_path_and_io
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "logo.png")
+      File.binwrite(path, PNG_1X1)
+      wb = FastXlsx::Workbook.new
+      ws = wb.add_worksheet
+      assert_same ws, ws.embed_image(2, 1, path)
+      ws.embed_image("D5", StringIO.new(PNG_4X2))
+
+      embedded = embedded_images(wb)
+      assert_equal %w[B3 D5], embedded[:cells].keys
+      assert_equal 2, embedded[:media]
+      assert_empty images(wb).first # in the cell, not in a drawing
+    end
+  end
+
+  def test_embed_image_with_alt_text_and_format
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.embed_image(0, 0, StringIO.new(PNG_1X1), alt_text: "Company logo", format: { align: :center })
+    ws.embed_image(1, 0, StringIO.new(PNG_4X2), format: FastXlsx::Format.new(bg_color: "#00FF00"))
+
+    cells = embedded_images(wb)[:cells]
+    assert_equal ["Company logo", nil], cells.values.map(&:last)
+    assert_equal "center", cell_style(wb, "A1")[:align]
+    assert_equal "FF00FF00", cell_style(wb, "A2")[:bg_color]
+  end
+
+  def test_embed_image_takes_its_table_column_format
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.add_table(0, 0, 3, 0, columns: [{ header: "Logo", format: { bg_color: "#00FF00" } }])
+    ws.embed_image(1, 0, StringIO.new(PNG_1X1))
+
+    assert_equal "FF00FF00", cell_style(wb, "A2")[:bg_color]
+  end
+
+  def test_embed_image_rejects_non_image_data_and_unknown_options
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(FastXlsx::Error) { ws.embed_image(0, 0, StringIO.new("not an image")) }
+    error = assert_raises(ArgumentError) { ws.embed_image(0, 0, StringIO.new(PNG_1X1), scale: 2) }
+    assert_includes error.message, "scale"
+  end
+
+  def test_append_goes_below_an_embedded_image
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.embed_image(0, 1, StringIO.new(PNG_1X1)) << %w[next]
+
+    assert_equal %w[next], rows(wb).last.compact
+  end
+
+  # rust_xlsxwriter only numbers embedded images when saving, and panics when
+  # it writes such a cell to disk earlier.
+  def test_embed_image_is_refused_in_constant_and_low_memory
+    %i[constant low].each do |memory|
+      ws = FastXlsx::Workbook.new(memory: memory).add_worksheet
+      error = assert_raises(FastXlsx::Error, memory.to_s) { ws.embed_image(0, 0, StringIO.new(PNG_1X1)) }
+      assert_includes error.message, "memory"
+    end
   end
 
   SALES = [%w[Month Sales], ["Jan", 10], ["Feb", 25], ["Mar", 18]].freeze

@@ -269,6 +269,13 @@ module FastXlsx
     end
     private :_write_ref
 
+    # [row, col, image bytes] from insert_image's and embed_image's (*cell, source).
+    def image_args(args)
+      row, col, (source, *) = CellRange.cell(args, 1..1)
+      [row, col, source.respond_to?(:read) ? source.read : File.binread(source)]
+    end
+    private :image_args
+
     # Writes one cell: ws["B2"] = 42 or ws[1, 1] = 42. Use {#write} to give
     # it a format.
     # @overload []=(ref, value)
@@ -330,10 +337,15 @@ module FastXlsx
     # Highlights cells in the range by rule; see the README for each type's
     # options.
     # @param range a cell range (see {Worksheet})
-    # @param type [Symbol] :cell, :text, :formula, :data_bar or :color_scale
-    # @option options [Symbol] :criteria e.g. :>, :between, :contains
-    # @option options [Numeric, String, Array] :value
+    # @param type [Symbol] :cell, :text, :formula, :top, :bottom, :average,
+    #   :duplicate, :unique, :blank, :not_blank, :error, :not_error, :date,
+    #   :data_bar or :color_scale
+    # @option options [Symbol] :criteria e.g. :>, :between, :contains,
+    #   :below (:average), :last_7_days (:date)
+    # @option options [Numeric, String, Array] :value (:top and :bottom: how many, default 10)
     # @option options [Format, Hash] :format
+    # @option options [Boolean] :percent value is a percentage (:top, :bottom)
+    # @option options [Integer] :std_dev 1, 2 or 3 standard deviations (:average)
     # @option options [Integer] :colors 2 or 3 (:color_scale)
     # @return [self]
     def conditional_format(*range, type:, **options)
@@ -370,9 +382,20 @@ module FastXlsx
     # @return [self]
     # @raise [FastXlsx::Error] for data that isn't a supported image
     def insert_image(*args, **)
-      row, col, (source, *) = CellRange.cell(args, 1..1)
-      bytes = source.respond_to?(:read) ? source.read : File.binread(source)
-      _insert_image(row, col, bytes, { ** })
+      _insert_image(*image_args(args), { ** })
+    end
+
+    # Embeds a PNG, JPEG, GIF or BMP image in the cell, where it fits the cell
+    # and moves and sizes with it (Excel 365's "Place in Cell"; older Excel
+    # shows #VALUE!). Not available in memory: :constant or :low mode.
+    # @overload embed_image(*cell, source, alt_text: nil, format: nil)
+    #   @param source [String, #read] a file path or an IO
+    #   @param alt_text [String, nil]
+    #   @param format [Format, Hash, nil] the cell's format, e.g. to center the image
+    # @return [self]
+    # @raise [FastXlsx::Error] for data that isn't a supported image, or in those modes
+    def embed_image(*args, alt_text: nil, format: nil)
+      _embed_image(*image_args(args), alt_text, Format._coerce(format))
     end
 
     # Inserts a chart with its top-left corner in the cell.

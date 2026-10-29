@@ -254,7 +254,7 @@ ws.autofilter(0..100, 0..3)   # rows and columns, each an Integer or a Range
 ws.merge_range(0, 0..3, "Q3 report", title) # row 1, columns A–D
 ```
 
-Methods that take one cell (`write`, `write_comment`, `insert_image`, `insert_chart`, `freeze_panes`) take `(row, col)` or a reference like `"B2"`.
+Methods that take one cell (`write`, `write_comment`, `insert_image`, `embed_image`, `insert_chart`, `freeze_panes`) take `(row, col)` or a reference like `"B2"`.
 
 `autofit` only sees rows still in memory, so in `:constant` / `:low` memory mode it ignores rows already written to disk; set widths with `column_width` instead.
 
@@ -315,6 +315,10 @@ ws.conditional_format(0, 1, 99, 1, type: :cell, criteria: :<, value: 0, format: 
 ws.conditional_format(0, 1, 99, 1, type: :cell, criteria: :between, value: [1, 10], format: red)
 ws.conditional_format(0, 0, 99, 0, type: :text, criteria: :contains, value: "error", format: red)
 ws.conditional_format(0, 0, 99, 3, type: :formula, value: "=$D1>100", format: red)
+ws.conditional_format(0, 1, 99, 1, type: :top, value: 10, format: red)  # or :bottom; percent: true for a %
+ws.conditional_format(0, 1, 99, 1, type: :average, criteria: :below, std_dev: 1, format: red)
+ws.conditional_format(0, 0, 99, 0, type: :duplicate, format: red)
+ws.conditional_format(0, 4, 99, 4, type: :date, criteria: :last_7_days, format: red)
 ws.conditional_format(0, 2, 99, 2, type: :data_bar)
 ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; colors: 2 for 2-color
 ```
@@ -324,6 +328,10 @@ ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; col
 | `:cell` | `:==`, `:!=`, `:>`, `:>=`, `:<`, `:<=`, `:between`, `:not_between` | number or string; `[min, max]` for the range criteria |
 | `:text` | `:contains`, `:not_contains`, `:begins_with`, `:ends_with` | string |
 | `:formula` | — | formula string, relative to the top-left cell |
+| `:top`, `:bottom` | — | how many, 1–1000 (default 10); with `percent: true`, a percentage 1–100 |
+| `:average` | `:above` (default), `:below`, `:above_or_equal`, `:below_or_equal`; `std_dev: 1`, `2` or `3` with `:above`/`:below` | — |
+| `:duplicate`, `:unique`, `:blank`, `:not_blank`, `:error`, `:not_error` | — | — |
+| `:date` | `:yesterday`, `:today`, `:tomorrow`, `:last_7_days`, `:last_week`, `:this_week`, `:next_week`, `:last_month`, `:this_month`, `:next_month` | — |
 | `:data_bar`, `:color_scale` | — | — |
 
 ### Data validation
@@ -350,6 +358,7 @@ ws.write_comment(0, 0, "Checked by finance", author: "Zac")   # Excel shows it a
 ws.insert_image(0, 0, "logo.png")                                  # top-left corner in A1
 ws.insert_image(0, 5, StringIO.new(blob.download), scale: 0.5, x_offset: 10, y_offset: 4, alt_text: "Logo")
 ws.insert_image(10, 0, "chart.png", width: 320, height: 180)       # pixel size; one of them keeps the aspect ratio
+ws.embed_image("B12", "photo.png", alt_text: "Photo", format: { align: :center }) # in the cell, sized with it (Excel 365; not in memory: :constant/:low)
 ```
 
 A String is always treated as a path, so wrap raw bytes (such as Active Storage's `blob.download`) in a `StringIO`.

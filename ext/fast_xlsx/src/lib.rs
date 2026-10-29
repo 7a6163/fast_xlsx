@@ -10,8 +10,11 @@ use magnus::{
 };
 use rust_xlsxwriter::{
     Color, ConditionalFormat, ConditionalFormat2ColorScale, ConditionalFormat3ColorScale,
+    ConditionalFormatAverage, ConditionalFormatAverageRule, ConditionalFormatBlank,
     ConditionalFormatCell, ConditionalFormatCellRule, ConditionalFormatDataBar,
-    ConditionalFormatFormula, ConditionalFormatText, ConditionalFormatTextRule,
+    ConditionalFormatDate, ConditionalFormatDateRule, ConditionalFormatDuplicate,
+    ConditionalFormatError, ConditionalFormatFormula, ConditionalFormatText,
+    ConditionalFormatTextRule, ConditionalFormatTop, ConditionalFormatTopRule,
     ConditionalFormatValue, DataValidation, DataValidationRule, FormatAlign, FormatBorder,
     FormatScript, FormatUnderline, IgnoreError, IntoDataValidationValue, IntoExcelData, XlsxError,
 };
@@ -1675,15 +1678,6 @@ impl Worksheet {
         lc: u16,
         options: RHash,
     ) -> Result<Obj<Self>, Error> {
-        check_keys(
-            ruby,
-            options,
-            &["type", "criteria", "value", "format", "colors"],
-            "conditional_format",
-        )?;
-        let format = opt::<&Format>(ruby, options, "format")?;
-        let value = raw_opt(ruby, options, "value");
-        let criteria = raw_opt(ruby, options, "criteria");
         let kind = choice(
             ruby,
             "conditional format type",
@@ -1694,8 +1688,46 @@ impl Worksheet {
                 ("formula", "formula"),
                 ("data_bar", "data_bar"),
                 ("color_scale", "color_scale"),
+                ("top", "top"),
+                ("bottom", "bottom"),
+                ("average", "average"),
+                ("duplicate", "duplicate"),
+                ("unique", "unique"),
+                ("blank", "blank"),
+                ("not_blank", "not_blank"),
+                ("error", "error"),
+                ("not_error", "not_error"),
+                ("date", "date"),
             ],
         )?;
+        // Each type takes only the options it uses, except the types released
+        // before :top etc., which keep ignoring unused options (SemVer).
+        let allowed: &[&str] = match kind {
+            "top" | "bottom" => &["type", "value", "percent", "format"],
+            "average" => &["type", "criteria", "std_dev", "format"],
+            "date" => &["type", "criteria", "format"],
+            "duplicate" | "unique" | "blank" | "not_blank" | "error" | "not_error" => {
+                &["type", "format"]
+            }
+            _ => &["type", "criteria", "value", "format", "colors"],
+        };
+        check_keys(ruby, options, allowed, &format!("conditional_format :{kind}"))?;
+        let format = opt::<&Format>(ruby, options, "format")?;
+        let value = raw_opt(ruby, options, "value");
+        let criteria = raw_opt(ruby, options, "criteria");
+        // A whole number in `range`: other numbers raise ArgumentError with
+        // `hint`, non-numbers TypeError.
+        let whole = |v: Value, name: &str, range: std::ops::RangeInclusive<f64>, hint: &str| {
+            let n = f64::try_convert(v)?;
+            if n.fract() == 0.0 && range.contains(&n) {
+                Ok(n as u16)
+            } else {
+                Err(Error::new(
+                    ruby.exception_arg_error(),
+                    format!("invalid {name} {}: {hint}", v.inspect()),
+                ))
+            }
+        };
         // Built before taking the lock: building converts Ruby values.
         type AddRule = Box<dyn FnOnce(&mut rust_xlsxwriter::Worksheet) -> Result<(), XlsxError>>;
         fn rule<T: ConditionalFormat + Send + Sync + 'static>(
@@ -1705,14 +1737,21 @@ impl Worksheet {
             Box::new(move |ws| ws.add_conditional_format(fr, fc, lr, lc, &cf).map(|_| ()))
         }
         let range = (fr, fc, lr, lc);
+        // The rule for a conditional format that takes format:.
+        macro_rules! formatted {
+            ($cf:expr) => {
+                rule(
+                    range,
+                    match format {
+                        Some(f) => $cf.set_format(&f.0.format),
+                        None => $cf,
+                    },
+                )
+            };
+        }
         let add_rule = match kind {
             "cell" => {
-                let mut cf =
-                    ConditionalFormatCell::new().set_rule(cell_rule(ruby, criteria, value)?);
-                if let Some(f) = format {
-                    cf = cf.set_format(&f.0.format);
-                }
-                rule(range, cf)
+                formatted!(ConditionalFormatCell::new().set_rule(cell_rule(ruby, criteria, value)?))
             }
             "text" => {
                 let text = String::try_convert(value)?;
@@ -1732,19 +1771,109 @@ impl Worksheet {
                     2 => ConditionalFormatTextRule::BeginsWith(text),
                     _ => ConditionalFormatTextRule::EndsWith(text),
                 };
-                let mut cf = ConditionalFormatText::new().set_rule(text_rule);
-                if let Some(f) = format {
-                    cf = cf.set_format(&f.0.format);
-                }
-                rule(range, cf)
+                formatted!(ConditionalFormatText::new().set_rule(text_rule))
             }
-            "formula" => {
-                let mut cf =
-                    ConditionalFormatFormula::new().set_rule(String::try_convert(value)?.as_str());
-                if let Some(f) = format {
-                    cf = cf.set_format(&f.0.format);
-                }
-                rule(range, cf)
+            "formula" => formatted!(
+                ConditionalFormatFormula::new().set_rule(String::try_convert(value)?.as_str())
+            ),
+            "top" | "bottom" => {
+                let percent = raw_opt(ruby, options, "percent").to_bool();
+                let max = if percent { 100.0 } else { 1000.0 };
+                let n = if value.is_nil() {
+                    10
+                } else {
+                    whole(value, &format!("{kind} value"), 1.0..=max, &format!("use 1..{max}"))?
+                };
+                let top_rule = match (kind, percent) {
+                    ("top", false) => ConditionalFormatTopRule::Top(n),
+                    ("top", true) => ConditionalFormatTopRule::TopPercent(n),
+                    (_, false) => ConditionalFormatTopRule::Bottom(n),
+                    (_, true) => ConditionalFormatTopRule::BottomPercent(n),
+                };
+                formatted!(ConditionalFormatTop::new().set_rule(top_rule))
+            }
+            "average" => {
+                use ConditionalFormatAverageRule as A;
+                // The rule without std_dev, and its 1, 2 and 3 std_dev variants.
+                let above = (
+                    A::AboveAverage,
+                    Some([
+                        A::OneStandardDeviationAbove,
+                        A::TwoStandardDeviationsAbove,
+                        A::ThreeStandardDeviationsAbove,
+                    ]),
+                );
+                let (plain, deviations) = if criteria.is_nil() {
+                    above
+                } else {
+                    choice(
+                        ruby,
+                        "average criteria",
+                        criteria,
+                        &[
+                            ("above", above),
+                            (
+                                "below",
+                                (
+                                    A::BelowAverage,
+                                    Some([
+                                        A::OneStandardDeviationBelow,
+                                        A::TwoStandardDeviationsBelow,
+                                        A::ThreeStandardDeviationsBelow,
+                                    ]),
+                                ),
+                            ),
+                            ("above_or_equal", (A::EqualOrAboveAverage, None)),
+                            ("below_or_equal", (A::EqualOrBelowAverage, None)),
+                        ],
+                    )?
+                };
+                let std_dev = raw_opt(ruby, options, "std_dev");
+                let hint = "use 1, 2 or 3, with criteria :above or :below";
+                let average_rule = match (std_dev.is_nil(), deviations) {
+                    (true, _) => plain,
+                    (false, Some([one, two, three])) => {
+                        match whole(std_dev, "std_dev", 1.0..=3.0, hint)? {
+                            1 => one,
+                            2 => two,
+                            _ => three,
+                        }
+                    }
+                    (false, None) => {
+                        return Err(Error::new(
+                            ruby.exception_arg_error(),
+                            format!("invalid std_dev {}: {hint}", std_dev.inspect()),
+                        ))
+                    }
+                };
+                formatted!(ConditionalFormatAverage::new().set_rule(average_rule))
+            }
+            "duplicate" => formatted!(ConditionalFormatDuplicate::new()),
+            "unique" => formatted!(ConditionalFormatDuplicate::new().invert()),
+            "blank" => formatted!(ConditionalFormatBlank::new()),
+            "not_blank" => formatted!(ConditionalFormatBlank::new().invert()),
+            "error" => formatted!(ConditionalFormatError::new()),
+            "not_error" => formatted!(ConditionalFormatError::new().invert()),
+            "date" => {
+                use ConditionalFormatDateRule as D;
+                let period = choice(
+                    ruby,
+                    "date criteria",
+                    criteria,
+                    &[
+                        ("yesterday", D::Yesterday),
+                        ("today", D::Today),
+                        ("tomorrow", D::Tomorrow),
+                        ("last_7_days", D::Last7Days),
+                        ("last_week", D::LastWeek),
+                        ("this_week", D::ThisWeek),
+                        ("next_week", D::NextWeek),
+                        ("last_month", D::LastMonth),
+                        ("this_month", D::ThisMonth),
+                        ("next_month", D::NextMonth),
+                    ],
+                )?;
+                formatted!(ConditionalFormatDate::new().set_rule(period))
             }
             "data_bar" => rule(range, ConditionalFormatDataBar::new()),
             _ => match opt::<u8>(ruby, options, "colors")?.unwrap_or(3) {
@@ -1908,6 +2037,54 @@ impl Worksheet {
                 .map(|_| ())
                 .map_err(xerr)
         })?;
+        Ok(rb_self)
+    }
+
+    fn embed_image(
+        ruby: &Ruby,
+        rb_self: Obj<Self>,
+        row: u32,
+        col: u16,
+        bytes: RString,
+        alt_text: Option<String>,
+        format: Option<&Format>,
+    ) -> Result<Obj<Self>, Error> {
+        // rust_xlsxwriter numbers embedded images only when saving, and panics
+        // if it writes the cell to disk before that.
+        if rb_self.flushes_rows {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                "embed_image is not supported in constant_memory / low_memory mode",
+            ));
+        }
+        // SAFETY: the bytes are copied into the Image before any Ruby code runs.
+        let mut image = Image::new_from_buffer(unsafe { bytes.as_slice() }).map_err(xerr)?;
+        if let Some(alt_text) = alt_text {
+            image = image.set_alt_text(alt_text);
+        }
+        let tables = rb_self.table_formats.borrow();
+        let rows = rb_self.formatted_rows.borrow();
+        let columns = rb_self.formatted_columns.borrow();
+        // As in write(): an image is never a date, so with no format of its
+        // own it takes its table column's, if any.
+        let format = Self::format_for(
+            &tables,
+            &rows,
+            &columns,
+            row,
+            col,
+            format.map(|f| &*f.0),
+            &CellValue::Empty,
+        );
+        rb_self.with_ws(|ws| {
+            match format {
+                Some(f) => ws.embed_image_with_format(row, col, &image, f),
+                None => ws.embed_image(row, col, &image),
+            }
+            .map(|_| ())
+            .map_err(xerr)
+        })?;
+        rb_self.advance(row);
         Ok(rb_self)
     }
 
@@ -2287,6 +2464,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ws.define_method("name", method!(Worksheet::name, 0))?;
     ws.define_method("_write_comment", method!(Worksheet::write_comment, 4))?;
     ws.define_method("_insert_image", method!(Worksheet::insert_image, 4))?;
+    ws.define_method("_embed_image", method!(Worksheet::embed_image, 5))?;
     ws.define_method("_insert_chart", method!(Worksheet::insert_chart, 3))?;
     ws.define_method("_add_table", method!(Worksheet::add_table, 5))?;
     ws.define_method(
