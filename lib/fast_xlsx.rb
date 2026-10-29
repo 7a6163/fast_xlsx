@@ -269,6 +269,13 @@ module FastXlsx
     end
     private :_write_ref
 
+    # [row, col, image bytes] from insert_image's and embed_image's (*cell, source).
+    def image_args(args)
+      row, col, (source, *) = CellRange.cell(args, 1..1)
+      [row, col, source.respond_to?(:read) ? source.read : File.binread(source)]
+    end
+    private :image_args
+
     # Writes one cell: ws["B2"] = 42 or ws[1, 1] = 42. Use {#write} to give
     # it a format.
     # @overload []=(ref, value)
@@ -375,9 +382,7 @@ module FastXlsx
     # @return [self]
     # @raise [FastXlsx::Error] for data that isn't a supported image
     def insert_image(*args, **)
-      row, col, (source, *) = CellRange.cell(args, 1..1)
-      bytes = source.respond_to?(:read) ? source.read : File.binread(source)
-      _insert_image(row, col, bytes, { ** })
+      _insert_image(*image_args(args), { ** })
     end
 
     # Embeds a PNG, JPEG, GIF or BMP image in the cell, where it fits the cell
@@ -390,9 +395,7 @@ module FastXlsx
     # @return [self]
     # @raise [FastXlsx::Error] for data that isn't a supported image, or in those modes
     def embed_image(*args, alt_text: nil, format: nil)
-      row, col, (source, *) = CellRange.cell(args, 1..1)
-      bytes = source.respond_to?(:read) ? source.read : File.binread(source)
-      _embed_image(row, col, bytes, alt_text, Format._coerce(format))
+      _embed_image(*image_args(args), alt_text, Format._coerce(format))
     end
 
     # Inserts a chart with its top-left corner in the cell.
