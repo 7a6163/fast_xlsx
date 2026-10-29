@@ -13,7 +13,7 @@ gem "rake-compiler"
 gem "minitest", "~> 6.0"
 
 gem "cgi" # roo requires cgi, which Ruby 4.0 no longer bundles
-gem "roo", "~> 3.0"
+gem "roo", "~> 4.0"
 gem "rubocop", "~> 1.92"
 
 gem "rbs", require: false # type signatures in sig/: bundle exec rbs -r date -I sig validate
