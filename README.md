@@ -315,6 +315,10 @@ ws.conditional_format(0, 1, 99, 1, type: :cell, criteria: :<, value: 0, format: 
 ws.conditional_format(0, 1, 99, 1, type: :cell, criteria: :between, value: [1, 10], format: red)
 ws.conditional_format(0, 0, 99, 0, type: :text, criteria: :contains, value: "error", format: red)
 ws.conditional_format(0, 0, 99, 3, type: :formula, value: "=$D1>100", format: red)
+ws.conditional_format(0, 1, 99, 1, type: :top, value: 10, format: red)  # or :bottom; percent: true for a %
+ws.conditional_format(0, 1, 99, 1, type: :average, criteria: :below, std_dev: 1, format: red)
+ws.conditional_format(0, 0, 99, 0, type: :duplicate, format: red)
+ws.conditional_format(0, 4, 99, 4, type: :date, criteria: :last_7_days, format: red)
 ws.conditional_format(0, 2, 99, 2, type: :data_bar)
 ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; colors: 2 for 2-color
 ```
@@ -324,6 +328,10 @@ ws.conditional_format(0, 2, 99, 2, type: :color_scale)            # 3-color; col
 | `:cell` | `:==`, `:!=`, `:>`, `:>=`, `:<`, `:<=`, `:between`, `:not_between` | number or string; `[min, max]` for the range criteria |
 | `:text` | `:contains`, `:not_contains`, `:begins_with`, `:ends_with` | string |
 | `:formula` | — | formula string, relative to the top-left cell |
+| `:top`, `:bottom` | — | how many, 1–1000 (default 10); with `percent: true`, a percentage 1–100 |
+| `:average` | `:above` (default), `:below`, `:above_or_equal`, `:below_or_equal`; `std_dev: 1`, `2` or `3` with `:above`/`:below` | — |
+| `:duplicate`, `:unique`, `:blank`, `:not_blank`, `:error`, `:not_error` | — | — |
+| `:date` | `:yesterday`, `:today`, `:tomorrow`, `:last_7_days`, `:last_week`, `:this_week`, `:next_week`, `:last_month`, `:this_month`, `:next_month` | — |
 | `:data_bar`, `:color_scale` | — | — |
 
 ### Data validation

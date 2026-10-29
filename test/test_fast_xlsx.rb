@@ -935,6 +935,86 @@ class TestFastXlsx < Minitest::Test
     assert_equal([3, 2], rules.drop(1).map { |r| r[:stops] })
   end
 
+  def test_conditional_format_top_and_bottom
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    red = FastXlsx::Format.new(font_color: "#FF0000")
+    ws.conditional_format(0, 0, 9, 0, type: :top, value: 3, format: red)
+    ws.conditional_format(0, 1, 9, 1, type: :bottom, value: 20, percent: true, format: red)
+    ws.conditional_format(0, 2, 9, 2, type: :top)
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[top10] * 3, rules.map { |r| r[:type] })
+    assert_equal "FFFF0000", rules[0][:font_color]
+    assert_equal(
+      [["3", nil, nil], %w[20 1 1], ["10", nil, nil]],
+      rules.map { |r| r[:attrs].values_at("rank", "percent", "bottom") }
+    )
+  end
+
+  def test_conditional_format_top_rejects_rank_outside_excel_limits
+    ws = FastXlsx::Workbook.new.add_worksheet
+    [[0, false], [1001, false], [101, true]].each do |value, percent|
+      assert_raises(ArgumentError, value.to_s) do
+        ws.conditional_format("A1:A9", type: :top, value: value, percent: percent)
+      end
+    end
+  end
+
+  def test_conditional_format_average
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    ws.conditional_format("A1:A9", type: :average)
+    ws.conditional_format("A1:A9", type: :average, criteria: :below_or_equal)
+    ws.conditional_format("A1:A9", type: :average, criteria: :below, std_dev: 2)
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[aboveAverage] * 3, rules.map { |r| r[:type] })
+    assert_equal(
+      [[nil, nil, nil], ["0", "1", nil], ["0", nil, "2"]],
+      rules.map { |r| r[:attrs].values_at("aboveAverage", "equalAverage", "stdDev") }
+    )
+  end
+
+  def test_conditional_format_average_std_dev_needs_above_or_below
+    ws = FastXlsx::Workbook.new.add_worksheet
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :average, std_dev: 4) }
+    assert_raises(ArgumentError) do
+      ws.conditional_format("A1:A9", type: :average, criteria: :above_or_equal, std_dev: 1)
+    end
+  end
+
+  def test_conditional_format_duplicates_blanks_and_errors
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    red = FastXlsx::Format.new(font_color: "#FF0000")
+    types = %i[duplicate unique blank not_blank error not_error]
+    types.each { |type| ws.conditional_format("A1:A9", type: type, format: red) }
+
+    rules = conditional_formats(wb)
+    assert_equal %w[duplicateValues uniqueValues containsBlanks notContainsBlanks containsErrors notContainsErrors],
+                 rules.map { |r| r[:type] }
+    assert_equal(["FFFF0000"] * 6, rules.map { |r| r[:font_color] })
+  end
+
+  def test_conditional_format_date_periods
+    periods = {
+      yesterday: "yesterday", today: "today", tomorrow: "tomorrow", last_7_days: "last7Days",
+      last_week: "lastWeek", this_week: "thisWeek", next_week: "nextWeek",
+      last_month: "lastMonth", this_month: "thisMonth", next_month: "nextMonth"
+    }
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet
+    periods.each_key do |period|
+      ws.conditional_format("A1:A9", type: :date, criteria: period, format: FastXlsx::Format.new(bold: true))
+    end
+
+    rules = conditional_formats(wb)
+    assert_equal(%w[timePeriod] * 10, rules.map { |r| r[:type] })
+    assert_equal(periods.values, rules.map { |r| r[:attrs]["timePeriod"] })
+    assert_raises(ArgumentError) { ws.conditional_format("A1:A9", type: :date, criteria: :someday) }
+  end
+
   def test_conditional_format_rejects_unknown_type_and_criteria
     ws = FastXlsx::Workbook.new.add_worksheet
     error = assert_raises(ArgumentError) { ws.conditional_format(0, 0, 0, 0, type: :sparkle) }

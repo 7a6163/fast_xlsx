@@ -10,8 +10,11 @@ use magnus::{
 };
 use rust_xlsxwriter::{
     Color, ConditionalFormat, ConditionalFormat2ColorScale, ConditionalFormat3ColorScale,
+    ConditionalFormatAverage, ConditionalFormatAverageRule, ConditionalFormatBlank,
     ConditionalFormatCell, ConditionalFormatCellRule, ConditionalFormatDataBar,
-    ConditionalFormatFormula, ConditionalFormatText, ConditionalFormatTextRule,
+    ConditionalFormatDate, ConditionalFormatDateRule, ConditionalFormatDuplicate,
+    ConditionalFormatError, ConditionalFormatFormula, ConditionalFormatText,
+    ConditionalFormatTextRule, ConditionalFormatTop, ConditionalFormatTopRule,
     ConditionalFormatValue, DataValidation, DataValidationRule, FormatAlign, FormatBorder,
     FormatScript, FormatUnderline, IgnoreError, IntoDataValidationValue, IntoExcelData, XlsxError,
 };
@@ -1678,7 +1681,9 @@ impl Worksheet {
         check_keys(
             ruby,
             options,
-            &["type", "criteria", "value", "format", "colors"],
+            &[
+                "type", "criteria", "value", "format", "colors", "percent", "std_dev",
+            ],
             "conditional_format",
         )?;
         let format = opt::<&Format>(ruby, options, "format")?;
@@ -1694,6 +1699,16 @@ impl Worksheet {
                 ("formula", "formula"),
                 ("data_bar", "data_bar"),
                 ("color_scale", "color_scale"),
+                ("top", "top"),
+                ("bottom", "bottom"),
+                ("average", "average"),
+                ("duplicate", "duplicate"),
+                ("unique", "unique"),
+                ("blank", "blank"),
+                ("not_blank", "not_blank"),
+                ("error", "error"),
+                ("not_error", "not_error"),
+                ("date", "date"),
             ],
         )?;
         // Built before taking the lock: building converts Ruby values.
@@ -1705,6 +1720,18 @@ impl Worksheet {
             Box::new(move |ws| ws.add_conditional_format(fr, fc, lr, lc, &cf).map(|_| ()))
         }
         let range = (fr, fc, lr, lc);
+        // The rule for a conditional format that takes format:.
+        macro_rules! formatted {
+            ($cf:expr) => {
+                rule(
+                    range,
+                    match format {
+                        Some(f) => $cf.set_format(&f.0.format),
+                        None => $cf,
+                    },
+                )
+            };
+        }
         let add_rule = match kind {
             "cell" => {
                 let mut cf =
@@ -1745,6 +1772,90 @@ impl Worksheet {
                     cf = cf.set_format(&f.0.format);
                 }
                 rule(range, cf)
+            }
+            "top" | "bottom" => {
+                let percent = raw_opt(ruby, options, "percent").to_bool();
+                let n = Option::<u16>::try_convert(value)?.unwrap_or(10);
+                let max = if percent { 100 } else { 1000 };
+                if !(1..=max).contains(&n) {
+                    return Err(Error::new(
+                        ruby.exception_arg_error(),
+                        format!("invalid {kind} value {n}: use 1..{max}"),
+                    ));
+                }
+                let top_rule = match (kind, percent) {
+                    ("top", false) => ConditionalFormatTopRule::Top(n),
+                    ("top", true) => ConditionalFormatTopRule::TopPercent(n),
+                    (_, false) => ConditionalFormatTopRule::Bottom(n),
+                    (_, true) => ConditionalFormatTopRule::BottomPercent(n),
+                };
+                formatted!(ConditionalFormatTop::new().set_rule(top_rule))
+            }
+            "average" => {
+                use ConditionalFormatAverageRule as A;
+                let above = if criteria.is_nil() {
+                    "above"
+                } else {
+                    choice(
+                        ruby,
+                        "average criteria",
+                        criteria,
+                        &[
+                            ("above", "above"),
+                            ("below", "below"),
+                            ("above_or_equal", "above_or_equal"),
+                            ("below_or_equal", "below_or_equal"),
+                        ],
+                    )?
+                };
+                let average_rule = match (above, opt::<u8>(ruby, options, "std_dev")?) {
+                    ("above", None) => A::AboveAverage,
+                    ("below", None) => A::BelowAverage,
+                    ("above_or_equal", None) => A::EqualOrAboveAverage,
+                    (_, None) => A::EqualOrBelowAverage,
+                    ("above", Some(1)) => A::OneStandardDeviationAbove,
+                    ("below", Some(1)) => A::OneStandardDeviationBelow,
+                    ("above", Some(2)) => A::TwoStandardDeviationsAbove,
+                    ("below", Some(2)) => A::TwoStandardDeviationsBelow,
+                    ("above", Some(3)) => A::ThreeStandardDeviationsAbove,
+                    ("below", Some(3)) => A::ThreeStandardDeviationsBelow,
+                    (_, Some(n)) => {
+                        return Err(Error::new(
+                            ruby.exception_arg_error(),
+                            format!(
+                            "invalid std_dev {n}: use 1, 2 or 3, with criteria :above or :below"
+                        ),
+                        ))
+                    }
+                };
+                formatted!(ConditionalFormatAverage::new().set_rule(average_rule))
+            }
+            "duplicate" => formatted!(ConditionalFormatDuplicate::new()),
+            "unique" => formatted!(ConditionalFormatDuplicate::new().invert()),
+            "blank" => formatted!(ConditionalFormatBlank::new()),
+            "not_blank" => formatted!(ConditionalFormatBlank::new().invert()),
+            "error" => formatted!(ConditionalFormatError::new()),
+            "not_error" => formatted!(ConditionalFormatError::new().invert()),
+            "date" => {
+                use ConditionalFormatDateRule as D;
+                let period = choice(
+                    ruby,
+                    "date criteria",
+                    criteria,
+                    &[
+                        ("yesterday", D::Yesterday),
+                        ("today", D::Today),
+                        ("tomorrow", D::Tomorrow),
+                        ("last_7_days", D::Last7Days),
+                        ("last_week", D::LastWeek),
+                        ("this_week", D::ThisWeek),
+                        ("next_week", D::NextWeek),
+                        ("last_month", D::LastMonth),
+                        ("this_month", D::ThisMonth),
+                        ("next_month", D::NextMonth),
+                    ],
+                )?;
+                formatted!(ConditionalFormatDate::new().set_rule(period))
             }
             "data_bar" => rule(range, ConditionalFormatDataBar::new()),
             _ => match opt::<u8>(ruby, options, "colors")?.unwrap_or(3) {

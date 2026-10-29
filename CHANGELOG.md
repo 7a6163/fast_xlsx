@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- `conditional_format` types `:top` and `:bottom` (`value:` count, or a percentage with `percent: true`), `:average` (`criteria: :above`, `:below`, `:above_or_equal`, `:below_or_equal`, and `std_dev: 1..3`), `:duplicate`, `:unique`, `:blank`, `:not_blank`, `:error`, `:not_error`, and `:date` (`criteria: :yesterday`, `:today`, `:tomorrow`, `:last_7_days`, `:last_week`, `:this_week`, `:next_week`, `:last_month`, `:this_month`, `:next_month`).
+
 ## [1.0.0] - 2026-10-18
 
 The first stable release, with the same API as 0.8.1. From now on fast_xlsx follows Semantic Versioning: no breaking change before 2.0, and anything to be removed first prints a deprecation warning for at least one minor release.
