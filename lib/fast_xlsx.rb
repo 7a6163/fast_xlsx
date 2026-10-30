@@ -339,17 +339,28 @@ module FastXlsx
     # @param range a cell range (see {Worksheet})
     # @param type [Symbol] :cell, :text, :formula, :top, :bottom, :average,
     #   :duplicate, :unique, :blank, :not_blank, :error, :not_error, :date,
-    #   :data_bar or :color_scale
+    #   :data_bar, :color_scale or :icon_set
     # @option options [Symbol] :criteria e.g. :>, :between, :contains,
     #   :below (:average), :last_7_days (:date)
     # @option options [Numeric, String, Array] :value (:top and :bottom: how many, default 10)
     # @option options [Format, Hash] :format
     # @option options [Boolean] :percent value is a percentage (:top, :bottom)
     # @option options [Integer] :std_dev 1, 2 or 3 standard deviations (:average)
-    # @option options [Integer] :colors 2 or 3 (:color_scale)
+    # @option options [Integer, Array] :colors 2 or 3, or the 2 or 3 colors
+    #   ("#RRGGBB" or 0xRRGGBB) from minimum to maximum (:color_scale)
+    # @option options [String, Integer] :color bar fill and border color,
+    #   "#RRGGBB" or 0xRRGGBB (:data_bar)
+    # @option options [Symbol] :icons e.g. :three_arrows, :five_boxes; default
+    #   :three_traffic_lights (:icon_set)
+    # @option options [Boolean] :reverse reverse the order of the icons (:icon_set)
+    # @option options [Boolean] :icons_only hide the cell values (:icon_set)
     # @return [self]
     def conditional_format(*range, type:, **options)
       options[:format] = Format._coerce(options[:format]) if options.key?(:format)
+      if type == :data_bar && options.key?(:colors)
+        warn "fast_xlsx: colors: is ignored on :data_bar and will raise in 2.0; use color:", uplevel: 1
+        options.delete(:colors)
+      end
       _conditional_format(*CellRange.split(range).first, { type: type, **options })
     end
 

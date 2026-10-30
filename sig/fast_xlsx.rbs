@@ -125,9 +125,17 @@ module FastXlsx
                    | (*cell_range | cell args, format: format?) -> self
     def conditional_format: (*cell_range range,
                              type: :cell | :text | :formula | :top | :bottom | :average | :duplicate | :unique
-                                 | :blank | :not_blank | :error | :not_error | :date | :data_bar | :color_scale,
+                                 | :blank | :not_blank | :error | :not_error | :date | :data_bar | :color_scale
+                                 | :icon_set,
                              ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],
-                             ?format: format, ?percent: bool, ?std_dev: 1 | 2 | 3, ?colors: 2 | 3) -> self
+                             ?format: format, ?percent: bool, ?std_dev: 1 | 2 | 3,
+                             ?colors: 2 | 3 | Array[Format::color], ?color: Format::color,
+                             ?icons: icon_type, ?reverse: bool, ?icons_only: bool) -> self
+    type icon_type = :three_arrows | :three_arrows_gray | :three_flags | :three_traffic_lights
+                   | :three_traffic_lights_with_rim | :three_signs | :three_symbols_circled | :three_symbols
+                   | :three_stars | :three_triangles | :four_arrows | :four_arrows_gray | :four_red_to_black
+                   | :four_histograms | :four_traffic_lights | :five_arrows | :five_arrows_gray
+                   | :five_histograms | :five_quadrants | :five_boxes
     def data_validation: (*cell_range range,
                           type: :list | :whole_number | :decimal | :text_length,
                           ?criteria: Symbol, ?value: Numeric | String | Array[Numeric | String],

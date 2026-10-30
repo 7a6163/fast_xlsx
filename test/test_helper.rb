@@ -76,6 +76,8 @@ module XlsxHelpers
         sqref: rule.parent["sqref"], type: rule["type"], operator: rule["operator"], text: rule["text"],
         formulas: rule.css("formula").map(&:text), stops: rule.css("cfvo").size,
         font_color: dxf&.at("font > color")&.[]("rgb"),
+        colors: rule.css("color").map { |c| c["rgb"] },
+        icon_set: rule.at("iconSet")&.attributes&.transform_values(&:value),
         attrs: rule.attributes.transform_values(&:value)
       }
     end
