@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-03
+
 ### Added
 
 - `Worksheet#embed_image` places an image in a cell, where it fits the cell and moves and sizes with it (Excel 365's "Place in Cell"; older Excel shows `#VALUE!`). It takes a path or an IO like `insert_image`, plus `alt_text:` and `format:`. It raises `FastXlsx::Error` in `memory: :constant` and `:low` mode, which rust_xlsxwriter does not support for embedded images.
