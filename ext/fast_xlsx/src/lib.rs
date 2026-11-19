@@ -89,6 +89,62 @@ fn check_positive(ruby: &Ruby, what: &str, size: f64) -> Result<f64, Error> {
     ))
 }
 
+// Characters XML 1.0 forbids. rust_xlsxwriter escapes them in cell text but
+// writes them as is into attributes, which makes the file unreadable.
+fn check_xml(what: &str, text: &str) -> Result<(), Error> {
+    let illegal = |c: char| {
+        (c < ' ' && !matches!(c, '\t' | '\n' | '\r')) || matches!(c, '\u{FFFE}' | '\u{FFFF}')
+    };
+    if text.chars().any(illegal) {
+        return Err(Error::new(
+            Ruby::get().unwrap().exception_arg_error(),
+            format!("invalid {what} {text:?}: control characters are not allowed"),
+        ));
+    }
+    Ok(())
+}
+
+// A chart title, axis name or series name. rust_xlsxwriter reads "Sheet1!A1"
+// and "=(...)" / "=Table[...]" strings as references, so a plain String must
+// not look like one; a FastXlsx::Formula asks for the reference.
+fn chart_label(ruby: &Ruby, v: Value) -> Result<String, Error> {
+    if v.is_kind_of(ruby.get_inner(&FORMULA)) {
+        let expression: String = v.funcall("expression", ())?;
+        let reference = expression.strip_prefix('=').unwrap_or(&expression);
+        return Ok(if reference.starts_with('(') || reference.contains('[') {
+            format!("={reference}")
+        } else {
+            reference.to_string()
+        });
+    }
+    let text = String::try_convert(v)?;
+    let unparsed = text.starts_with("=(") || (text.starts_with('=') && text.contains('['));
+    // The same test as rust_xlsxwriter's is_valid_range().
+    let range = text.find('!').is_some_and(|at| {
+        let range = text[at + 1..].replace('$', "");
+        range.starts_with(|c: char| c.is_ascii_uppercase())
+            && range.ends_with(|c: char| c.is_ascii_digit())
+            && range
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == ':')
+    });
+    if unparsed || range {
+        return Err(Error::new(
+            ruby.exception_arg_error(),
+            format!(
+                "chart text {text:?} would be read as a cell reference: \
+                 pass a FastXlsx::Formula to reference a cell"
+            ),
+        ));
+    }
+    Ok(text)
+}
+
+// The largest area a sheet can cover, in pixels: every column at 255
+// characters wide and every row at 409 points high.
+const MAX_IMAGE_WIDTH: f64 = 16_384.0 * 1_790.0;
+const MAX_IMAGE_HEIGHT: f64 = 1_048_576.0 * 546.0;
+
 // A range of rows is checked before any row changes, so it is all or nothing.
 fn check_last_row(last: u32) -> Result<(), Error> {
     if last < MAX_ROWS {
@@ -221,6 +277,7 @@ impl Workbook {
             Some(name) => {
                 // Validate the name before adding: rust_xlsxwriter adds the
                 // sheet first, so a bad name would leave a "SheetN" behind.
+                check_xml("worksheet name", &name)?;
                 rust_xlsxwriter::Worksheet::new()
                     .set_name(&name)
                     .map_err(xerr)?;
@@ -431,7 +488,9 @@ impl CellValue {
         } else if v.is_kind_of(ruby.get_inner(&FORMULA)) {
             CellValue::Formula(v.funcall("expression", ())?)
         } else if v.is_kind_of(ruby.get_inner(&URL)) {
-            CellValue::Url(v.funcall("url", ())?, v.funcall("text", ())?)
+            let url: String = v.funcall("url", ())?;
+            check_xml("URL", &url)?;
+            CellValue::Url(url, v.funcall("text", ())?)
         } else if v.is_kind_of(ruby.get_inner(&RICH_STRING)) {
             let segments: RArray = v.funcall("segments", ())?;
             let mut parts = Vec::with_capacity(segments.len());
@@ -579,7 +638,14 @@ fn choice<T: Clone>(
 // A number or string compared against in a conditional format rule.
 fn cf_value(ruby: &Ruby, v: Value) -> Result<ConditionalFormatValue, Error> {
     if let Some(s) = RString::from_value(v) {
-        Ok(s.to_string()?.into())
+        let s = s.to_string()?;
+        // rust_xlsxwriter writes a "quoted" string as is, so one with a lone
+        // quote inside would continue as formula text: quote it here instead.
+        let inner = s.strip_prefix('"').and_then(|s| s.strip_suffix('"'));
+        if inner.is_some_and(|inner| inner.replace("\"\"", "").contains('"')) {
+            return Ok(format!("\"{}\"", s.replace('"', "\"\"")).into());
+        }
+        Ok(s.into())
     } else if v.is_kind_of(ruby.class_numeric()) {
         Ok(f64::try_convert(v)?.into())
     } else {
@@ -821,7 +887,9 @@ const TABLE_TOTALS: &[(&str, TableFunction)] = &[
 // Also returns a copy of the column's format, if any, for later writes.
 fn table_column(ruby: &Ruby, v: Value) -> Result<(TableColumn, Option<Arc<Style>>), Error> {
     let Some(spec) = RHash::from_value(v) else {
-        return Ok((TableColumn::new().set_header(String::try_convert(v)?), None));
+        let header = String::try_convert(v)?;
+        check_xml("table header", &header)?;
+        return Ok((TableColumn::new().set_header(header), None));
     };
     check_keys(
         ruby,
@@ -830,11 +898,13 @@ fn table_column(ruby: &Ruby, v: Value) -> Result<(TableColumn, Option<Arc<Style>
         "table column",
     )?;
     let header = String::try_convert(raw_opt(ruby, spec, "header"))?;
+    check_xml("table header", &header)?;
     let mut column = TableColumn::new().set_header(header);
     if let Some(total) = opt::<Value>(ruby, spec, "total")? {
         column = column.set_total_function(choice(ruby, "table total", total, TABLE_TOTALS)?);
     }
     if let Some(label) = opt::<String>(ruby, spec, "total_label")? {
+        check_xml("total_label", &label)?;
         column = column.set_total_label(label);
     }
     let format = opt::<&Format>(ruby, spec, "format")?.map(|f| f.0.clone());
@@ -1002,14 +1072,20 @@ impl Format {
                 "border_color" => taken.set_border_color(color(ruby, value)?),
                 "num_format" => {
                     has_num_format = true;
-                    taken.set_num_format(String::try_convert(value)?)
+                    let num_format = String::try_convert(value)?;
+                    check_xml("num_format", &num_format)?;
+                    taken.set_num_format(num_format)
                 }
                 "font_size" => taken.set_font_size(check_positive(
                     ruby,
                     "font_size",
                     f64::try_convert(value)?,
                 )?),
-                "font_name" => taken.set_font_name(String::try_convert(value)?),
+                "font_name" => {
+                    let font_name = String::try_convert(value)?;
+                    check_xml("font_name", &font_name)?;
+                    taken.set_font_name(font_name)
+                }
                 "font_color" => taken.set_font_color(color(ruby, value)?),
                 "bg_color" => taken.set_background_color(color(ruby, value)?),
                 "align" => taken.set_align(choice(
@@ -1279,6 +1355,9 @@ impl Worksheet {
         format: Option<&Format>,
     ) -> Result<(), Error> {
         rb_self.check_not_flushed(ruby, row)?;
+        // Converting the value can run Ruby code, and a Format made from a
+        // Hash is only kept alive by Format._coerce's cache: keep our own copy.
+        let style = format.map(|f| f.0.clone());
         let value = CellValue::from_ruby(ruby, v)?;
         let tables = rb_self.table_formats.borrow();
         let rows = rb_self.formatted_rows.borrow();
@@ -1294,7 +1373,7 @@ impl Worksheet {
                     &columns,
                     row,
                     col,
-                    format.map(|f| &*f.0),
+                    style.as_deref(),
                     &value,
                 ),
             )
@@ -1407,6 +1486,7 @@ impl Worksheet {
         name: Option<String>,
         password: Option<String>,
     ) -> Result<Obj<Self>, Error> {
+        check_xml("range name", name.as_deref().unwrap_or(""))?;
         rb_self.with_ws(|ws| {
             ws.unprotect_range_with_options(
                 fr,
@@ -1717,7 +1797,8 @@ impl Worksheet {
             _ => &["type", "criteria", "value", "format", "colors"],
         };
         check_keys(ruby, options, allowed, &format!("conditional_format :{kind}"))?;
-        let format = opt::<&Format>(ruby, options, "format")?;
+        // A copy, as in write(): the options below are converted by Ruby code.
+        let format = opt::<&Format>(ruby, options, "format")?.map(|f| f.0.clone());
         let value = raw_opt(ruby, options, "value");
         let criteria = raw_opt(ruby, options, "criteria");
         // A whole number in `range`: other numbers raise ArgumentError with
@@ -1769,8 +1850,8 @@ impl Worksheet {
             ($cf:expr) => {
                 rule(
                     range,
-                    match format {
-                        Some(f) => $cf.set_format(&f.0.format),
+                    match &format {
+                        Some(f) => $cf.set_format(&f.format),
                         None => $cf,
                     },
                 )
@@ -1782,6 +1863,7 @@ impl Worksheet {
             }
             "text" => {
                 let text = String::try_convert(value)?;
+                check_xml("conditional format text", &text)?;
                 let text_rule = match choice(
                     ruby,
                     "text criteria",
@@ -2067,6 +2149,7 @@ impl Worksheet {
             ("error_message", DataValidation::set_error_message),
         ] {
             if let Some(text) = opt::<String>(ruby, options, name)? {
+                check_xml(name, &text)?;
                 dv = set(dv, text).map_err(xerr)?;
             }
         }
@@ -2119,6 +2202,7 @@ impl Worksheet {
         };
         let width = positive("width")?;
         let height = positive("height")?;
+        let (mut scale_w, mut scale_h) = (1.0, 1.0);
         if let Some(scale) = positive("scale")? {
             if width.is_some() || height.is_some() {
                 return Err(Error::new(
@@ -2126,18 +2210,29 @@ impl Worksheet {
                     "pass either scale: or width:/height:, not both",
                 ));
             }
-            image = image.set_scale_width(scale).set_scale_height(scale);
+            (scale_w, scale_h) = (scale, scale);
         } else if width.is_some() || height.is_some() {
             // Displayed size at scale 1, as rust_xlsxwriter computes it from the DPI.
             let natural_w = image.width() * 96.0 / image.width_dpi();
             let natural_h = image.height() * 96.0 / image.height_dpi();
-            let scale_w = width.map(|w| w / natural_w);
-            let scale_h = height.map(|h| h / natural_h);
+            let sw = width.map(|w| w / natural_w);
+            let sh = height.map(|h| h / natural_h);
             // With only one dimension, scale the other by the same factor.
-            let (sw, sh) = (scale_w.or(scale_h).unwrap(), scale_h.or(scale_w).unwrap());
-            image = image.set_scale_width(sw).set_scale_height(sh);
+            (scale_w, scale_h) = (sw.or(sh).unwrap(), sh.or(sw).unwrap());
         }
+        // The size comes from the image's own header, and saving walks every
+        // row and column the image covers, with no way to interrupt it.
+        let shown_w = image.width() * 96.0 / image.width_dpi() * scale_w;
+        let shown_h = image.height() * 96.0 / image.height_dpi() * scale_h;
+        if !(shown_w <= MAX_IMAGE_WIDTH && shown_h <= MAX_IMAGE_HEIGHT) {
+            return Err(Error::new(
+                ruby.get_inner(&ERROR),
+                format!("image is too large for a worksheet: {shown_w} x {shown_h} pixels"),
+            ));
+        }
+        image = image.set_scale_width(scale_w).set_scale_height(scale_h);
         if let Some(alt_text) = opt::<String>(ruby, options, "alt_text")? {
+            check_xml("alt_text", &alt_text)?;
             image = image.set_alt_text(alt_text);
         }
         let x = opt::<u32>(ruby, options, "x_offset")?.unwrap_or(0);
@@ -2237,19 +2332,19 @@ impl Worksheet {
             if let Some(categories) = opt::<String>(ruby, s, "categories")? {
                 cs.set_categories(categories.as_str());
             }
-            if let Some(name) = opt::<String>(ruby, s, "name")? {
-                cs.set_name(name.as_str());
+            if let Some(name) = opt::<Value>(ruby, s, "name")? {
+                cs.set_name(chart_label(ruby, name)?.as_str());
             }
             Ok(())
         })?;
-        if let Some(title) = opt::<String>(ruby, options, "title")? {
-            chart.title().set_name(title.as_str());
+        if let Some(title) = opt::<Value>(ruby, options, "title")? {
+            chart.title().set_name(chart_label(ruby, title)?.as_str());
         }
-        if let Some(name) = opt::<String>(ruby, options, "x_axis")? {
-            chart.x_axis().set_name(name.as_str());
+        if let Some(name) = opt::<Value>(ruby, options, "x_axis")? {
+            chart.x_axis().set_name(chart_label(ruby, name)?.as_str());
         }
-        if let Some(name) = opt::<String>(ruby, options, "y_axis")? {
-            chart.y_axis().set_name(name.as_str());
+        if let Some(name) = opt::<Value>(ruby, options, "y_axis")? {
+            chart.y_axis().set_name(chart_label(ruby, name)?.as_str());
         }
         if let Some(width) = opt::<u32>(ruby, options, "width")? {
             chart.set_width(width);

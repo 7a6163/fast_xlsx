@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-19
+
+Upgrading is recommended: 1.1.0 and earlier are affected by the issues under Security. A chart `title:`, `x_axis:`, `y_axis:` or series `name:` written as a cell reference String (`"Sheet1!$A$1"`) now raises; pass `FastXlsx::Formula.new("Sheet1!$A$1")` instead.
+
+### Security
+
+- `insert_image` raises `FastXlsx::Error` for an image that would be larger than a worksheet. The size comes from the image's own header, so a file of a few bytes could keep `save` and `to_xlsx` busy for minutes, and a `Timeout` could not interrupt it.
+- Control characters (below U+0020 other than tab, newline and carriage return) now raise `ArgumentError` in worksheet names, table headers and `total_label:`, data validation titles and messages, `insert_image`'s `alt_text:`, `:text` conditional format values, `num_format:`, `font_name:`, URLs and `unprotect_range`'s `name:`. They were written into the file as is, and Excel could not open it. Cell text is not affected.
+- A chart's `title:`, `x_axis:`, `y_axis:` and series `name:` are always text. A String such as `"Sheet1!A1"` or `"=(Sheet1!$A$1)"` was read as a cell reference or written as a formula; it now raises `ArgumentError`. To show a cell's content, pass a `FastXlsx::Formula`.
+- A `:cell` conditional format value that starts and ends with a double quote and has another one inside (`'"x"&A2&"y"'`) is compared as that text, instead of continuing as formula text.
+
+### Fixed
+
+- `write` with a Hash format, and `conditional_format` called natively, keep their own copy of the format while the value is converted. The value's `to_s` (or another thread) could push the format out of the cache of Hash formats and let it be freed before it was used. No crash was reproduced.
+- Updated rust_xlsxwriter to 0.102, which doubles a double quote in a `:text` conditional format value instead of ending the rule's formula there.
+
 ## [1.1.0] - 2026-11-03
 
 ### Added

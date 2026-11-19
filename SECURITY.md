@@ -2,12 +2,12 @@
 
 ## Supported versions
 
-Security fixes go into the latest release of the newest minor version. Until 1.0 that is 0.8.x; from 1.0, the latest 1.x.
+Security fixes go into the latest release of the newest minor version.
 
 | Version | Supported |
 |---|---|
-| 0.8.x | ✅ |
-| < 0.8 | ❌ (upgrade to 0.8.x; the [changelog](CHANGELOG.md) lists every change) |
+| 1.2.x | ✅ |
+| < 1.2 | ❌ (upgrade to 1.2.x; the [changelog](CHANGELOG.md) lists every change) |
 
 ## Reporting a vulnerability
 

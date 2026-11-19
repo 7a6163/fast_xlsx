@@ -391,7 +391,8 @@ module FastXlsx
     #   @option options [Integer] :x_offset, :y_offset pixels
     #   @option options [String] :alt_text
     # @return [self]
-    # @raise [FastXlsx::Error] for data that isn't a supported image
+    # @raise [FastXlsx::Error] for data that isn't a supported image, or an
+    #   image that would be larger than a worksheet
     def insert_image(*args, **)
       _insert_image(*image_args(args), { ** })
     end
@@ -415,7 +416,9 @@ module FastXlsx
     #   :radar, :scatter, and the stacked variants
     # @param series [Array<Hash>] { values:, categories:, name: } with ranges
     #   such as "Sheet1!$B$2:$B$13"
-    # @option options [String] :title, :x_axis, :y_axis
+    # @option options [String, Formula] :title, :x_axis, :y_axis text; these and a
+    #   series name: take a {Formula} such as "Sheet1!$A$1" to show a cell instead
+    # @raise [ArgumentError] for text that Excel would read as a cell reference
     # @option options [Integer] :width, :height pixels
     # @return [self]
     def insert_chart(*cell, type:, series:, **)
