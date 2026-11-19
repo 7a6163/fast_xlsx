@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-19
+
+Upgrading is recommended: 1.1.0 and earlier are affected by the issues under Security. A chart `title:`, `x_axis:`, `y_axis:` or series `name:` written as a cell reference String (`"Sheet1!$A$1"`) now raises; pass `FastXlsx::Formula.new("Sheet1!$A$1")` instead.
+
 ### Security
 
 - `insert_image` raises `FastXlsx::Error` for an image that would be larger than a worksheet. The size comes from the image's own header, so a file of a few bytes could keep `save` and `to_xlsx` busy for minutes, and a `Timeout` could not interrupt it.
