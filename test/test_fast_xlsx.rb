@@ -2392,4 +2392,100 @@ class TestFastXlsx < Minitest::Test
       assert_equal "saved", Roo::Excelx.new(path.to_s).cell(1, 1)
     end
   end
+
+  # Control characters are illegal in XML; rust_xlsxwriter only escapes them in cell text.
+  def test_control_characters_are_rejected_where_they_would_break_the_file
+    bad = "a\u0001b"
+    wb = FastXlsx::Workbook.new
+    ws = wb.add_worksheet.concat([%w[h i], [1, 2]])
+    bold = FastXlsx::Format.new(bold: true)
+    validate = ->(**text) { ws.data_validation(0, 0, 0, 0, type: :whole_number, criteria: :>, value: 1, **text) }
+    highlight = lambda do |text|
+      ws.conditional_format(0, 0, 1, 0, type: :text, criteria: :contains, value: text, format: bold)
+    end
+    {
+      "worksheet name" => -> { wb.add_worksheet(bad) },
+      "table header" => -> { ws.add_table(0, 0, 1, 1, columns: [bad, "i"]) },
+      "total_label" => -> { ws.add_table(0, 0, 2, 0, total_row: true, columns: [{ header: "h", total_label: bad }]) },
+      "input_title" => -> { validate.call(input_title: bad) },
+      "error_message" => -> { validate.call(error_message: bad) },
+      "alt_text" => -> { ws.insert_image(3, 3, StringIO.new(PNG_1X1), alt_text: bad) },
+      "conditional format text" => -> { highlight.call(bad) },
+      "num_format" => -> { ws.write(3, 0, 1, { num_format: bad }) },
+      "font_name" => -> { ws.write(3, 0, 1, { font_name: bad }) },
+      "URL" => -> { ws.write(3, 0, FastXlsx::URL.new("https://example.com/#{bad}")) },
+      "range name" => -> { ws.unprotect_range(0, 0, 1, 1, name: bad) }
+    }.each do |what, call|
+      error = assert_raises(ArgumentError, what, &call)
+      assert_includes error.message, what
+    end
+
+    ws.write(4, 0, bad) # cell text is escaped, so it stays allowed
+    assert_equal 1, Roo::Excelx.new(StringIO.new(wb.to_xlsx)).sheets.size
+  end
+
+  # Saving walks every row and column an image covers, and the size comes from the image's header.
+  def test_insert_image_rejects_an_image_larger_than_a_sheet
+    ws = FastXlsx::Workbook.new.add_worksheet
+    tall = PNG_1X1.dup
+    tall[20, 4] = [0xFFFFFFFF].pack("N") # the height in the IHDR chunk
+
+    assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new(tall)) }
+    assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new(PNG_1X1), scale: 1e12) }
+    assert_raises(FastXlsx::Error) { ws.insert_image(0, 0, StringIO.new(tall), width: 10) }
+    ws.insert_image(0, 0, StringIO.new(tall), width: 10, height: 10) # a fixed size is fine
+  end
+
+  def test_insert_chart_text_is_never_read_as_a_reference
+    ws = FastXlsx::Workbook.new.add_worksheet.concat(SALES)
+    ["Sheet1!A1", "Nope!$A$1:$A$2", "=(Sheet1!$A$1)", "=Table1[Sales]"].each do |text|
+      assert_raises(ArgumentError, text) { ws.insert_chart(0, 3, type: :line, series: [SALES_SERIES], title: text) }
+      assert_raises(ArgumentError, text) { ws.insert_chart(0, 3, type: :line, series: [SALES_SERIES], x_axis: text) }
+      assert_raises(ArgumentError, text) do
+        ws.insert_chart(0, 3, type: :line, series: [SALES_SERIES.merge(name: text)])
+      end
+    end
+
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.concat(SALES).insert_chart(0, 3, type: :line, series: [SALES_SERIES], title: "=Q1! 50% up")
+    assert_equal "=Q1! 50% up", chart(wb)[:title]
+  end
+
+  def test_insert_chart_takes_a_formula_to_reference_a_cell
+    wb = FastXlsx::Workbook.new
+    name = FastXlsx::Formula.new("=Sheet1!$B$1")
+    wb.add_worksheet.concat(SALES).insert_chart(0, 3, type: :line, series: [SALES_SERIES.merge(name: name)])
+
+    assert_equal "Sheet1!$B$1", chart(wb)[:series].first.first
+  end
+
+  def test_conditional_format_strings_stay_inside_their_quotes
+    rule = lambda do |**options|
+      wb = FastXlsx::Workbook.new
+      wb.add_worksheet.conditional_format(0, 0, 9, 0, **options, format: FastXlsx::Format.new(bold: true))
+      conditional_formats(wb).first[:formulas]
+    end
+
+    assert_equal ['NOT(ISERROR(SEARCH("a"",A1)))+(1=1)+NOT(ISERROR(SEARCH(""b",A1)))'],
+                 rule.call(type: :text, criteria: :contains, value: 'a",A1)))+(1=1)+NOT(ISERROR(SEARCH("b')
+    assert_equal ['"""x""&A2&""y"""'], rule.call(type: :cell, criteria: :==, value: '"x"&A2&"y"')
+    assert_equal ['"x""y"'], rule.call(type: :cell, criteria: :==, value: 'x"y')
+    assert_equal ['"x"'], rule.call(type: :cell, criteria: :==, value: '"x"') # already quoted, as before
+  end
+
+  # The Format made from a Hash lives only in Format._coerce's cache, and
+  # converting the value runs Ruby code that can push it out of there.
+  def test_write_keeps_a_hash_format_while_the_value_is_converted
+    evicting = Class.new do
+      def to_s
+        2000.times { |i| FastXlsx::Format._coerce({ font_size: i + 1 }) }
+        GC.start
+        "x"
+      end
+    end
+    wb = FastXlsx::Workbook.new
+    wb.add_worksheet.write(0, 0, evicting.new, { font_size: 3000, font_name: "Probe" })
+
+    assert_equal [3000.0, "Probe"], cell_style(wb, "A1").values_at(:font_size, :font_name)
+  end
 end
