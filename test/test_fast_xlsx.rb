@@ -2459,6 +2459,18 @@ class TestFastXlsx < Minitest::Test
     assert_equal "Sheet1!$B$1", chart(wb)[:series].first.first
   end
 
+  def test_insert_chart_takes_a_formula_with_a_non_contiguous_range
+    ["=(Sheet1!$A$1,Sheet1!$A$2)", "(Sheet1!$A$1,Sheet1!$A$2)"].each do |expression|
+      wb = FastXlsx::Workbook.new
+      name = FastXlsx::Formula.new(expression)
+      wb.add_worksheet.concat(SALES).insert_chart(0, 3, type: :line, series: [SALES_SERIES.merge(name: name)])
+
+      zip = Zip::File.open_buffer(StringIO.new(wb.to_xlsx))
+      xml = Nokogiri::XML(zip.read("xl/charts/chart1.xml")).remove_namespaces!
+      assert_equal "(Sheet1!$A$1,Sheet1!$A$2)", xml.at("ser > tx > strRef > f")&.text, expression
+    end
+  end
+
   def test_conditional_format_strings_stay_inside_their_quotes
     rule = lambda do |**options|
       wb = FastXlsx::Workbook.new
